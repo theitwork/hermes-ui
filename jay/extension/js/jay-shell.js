@@ -353,7 +353,7 @@
       state.params = params;
       if (els.app) els.app.dataset.route = r;
       document.documentElement.dataset.jayRoute = r;
-      setActiveNav(r === 'hermes' ? (params._ === 'tasks' ? 'automations' : 'chat') : r);
+      setActiveNav(r === 'hermes' ? (params._ === 'tasks' ? 'automations' : (params._ === 'chat' ? 'chat' : 'system')) : r);
       document.title = 'Hermes · JAY';
       enterHermes(r, r === 'hermes' ? params._ : null);
       mount(els.view);
