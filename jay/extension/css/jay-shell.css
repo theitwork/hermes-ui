@@ -1,0 +1,328 @@
+/* JAY customization — application shell: rail, topbar, bottom nav, Hermes mode. */
+
+/* ── Base (zero-specificity resets so component classes always win) ── */
+.jay-app {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  grid-template-columns: var(--jay-rail-w) minmax(0, 1fr);
+  background: var(--jay-bg);
+  color: var(--jay-text);
+  font-family: var(--jay-font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  color-scheme: light;
+}
+:root.dark .jay-app { color-scheme: dark; }
+:where(.jay-app) :where(button) {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+:where(.jay-app) :where(button:disabled) { cursor: not-allowed; }
+:where(.jay-app) :where(ul, ol) { list-style: none; }
+:where(.jay-app) :where(h1, h2, h3) { font-weight: 600; }
+:where(.jay-app) :focus { outline: none; }
+:where(.jay-app) :focus-visible { outline: 2px solid var(--jay-accent); outline-offset: 2px; border-radius: 8px; }
+:where(.jay-app) * { scrollbar-width: thin; scrollbar-color: var(--jay-border-strong) transparent; }
+:where(.jay-app) ::-webkit-scrollbar { width: 10px; height: 10px; }
+:where(.jay-app) ::-webkit-scrollbar-thumb { background: var(--jay-border-strong); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+:where(.jay-app) ::-webkit-scrollbar-track { background: transparent; }
+:where(.jay-app) ::selection { background: var(--jay-accent-soft); }
+
+/* ── Monogram ── */
+.jay-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--jay-text);
+  color: var(--jay-bg);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  flex-shrink: 0;
+  user-select: none;
+}
+.jay-mark.is-sm { width: 28px; height: 28px; border-radius: 9px; font-size: 14px; }
+.jay-mark.is-xs { width: 22px; height: 22px; border-radius: 7px; font-size: 11.5px; }
+
+/* ── Rail ── */
+.jay-rail {
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 0 14px;
+  background: var(--jay-canvas);
+  border-right: 1px solid var(--jay-border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+.jay-rail::-webkit-scrollbar { display: none; }
+.jay-rail-logo { margin-bottom: 14px; border-radius: 12px; }
+.jay-rail-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.jay-rail-sep { width: 24px; height: 1px; background: var(--jay-border-strong); margin: 8px 0; flex-shrink: 0; }
+.jay-rail-spacer { flex: 1; min-height: 12px; }
+.jay-rail-theme { margin-bottom: 6px; }
+.jay-rail-profile { border-radius: 999px; padding: 2px; }
+.jay-rail-profile .jay-avatar { width: 34px; height: 34px; font-size: 12.5px; }
+.jay-rail-profile:hover .jay-avatar { background: var(--jay-surface-3); color: var(--jay-text); }
+
+.jay-nav-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: var(--jay-muted);
+  transition: background var(--jay-dur) var(--jay-ease), color var(--jay-dur) var(--jay-ease);
+  flex-shrink: 0;
+}
+.jay-nav-btn:hover { background: var(--jay-hover); color: var(--jay-text); }
+.jay-nav-btn.is-active { background: var(--jay-accent-soft); color: var(--jay-accent-text); }
+.jay-nav-btn.is-active::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--jay-accent);
+}
+.jay-nav-badge {
+  position: absolute;
+  top: 5px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--jay-danger);
+  color: var(--jay-bg);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--jay-canvas);
+  font-variant-numeric: tabular-nums;
+}
+.jay-nav-badge.is-warning { background: var(--jay-warning); }
+.jay-nav-badge[hidden] { display: none; }
+
+/* Tooltips (pointer devices only; icon buttons keep aria-labels) */
+@media (hover: hover) {
+  .jay-app [data-tip] { position: relative; }
+  .jay-app [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    transform: translateY(-2px);
+    padding: 4px 8px;
+    border-radius: 7px;
+    background: var(--jay-text);
+    color: var(--jay-bg);
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms var(--jay-ease), transform 120ms var(--jay-ease);
+    z-index: 20;
+  }
+  .jay-app [data-tip]:hover::after,
+  .jay-app [data-tip]:focus-visible::after { opacity: 1; transform: translateY(0); transition-delay: 350ms; }
+  .jay-rail [data-tip]::after { top: 50%; right: auto; left: calc(100% + 10px); transform: translate(-2px, -50%); }
+  .jay-rail [data-tip]:hover::after,
+  .jay-rail [data-tip]:focus-visible::after { transform: translate(0, -50%); }
+}
+
+/* ── Main column ── */
+.jay-main { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+.jay-view-scroll { overflow: auto; overscroll-behavior: contain; min-height: 0; position: relative; }
+.jay-view { min-height: 100%; outline: none; }
+.jay-app[data-route="home"] .jay-view { height: 100%; }
+
+/* ── Topbar ── */
+.jay-topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 340px) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  height: var(--jay-topbar-h);
+  padding: 0 16px 0 20px;
+}
+.jay-brand { display: none; align-items: center; gap: 10px; border-radius: 10px; }
+.jay-brand-word { font-weight: 700; letter-spacing: 0.14em; font-size: 13px; }
+.jay-topbar-titles { min-width: 0; }
+.jay-topbar-title { font-size: 16px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-topbar-title:empty { display: none; }
+.jay-topbar-sub { font-size: 12.5px; color: var(--jay-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-topbar-title:empty + .jay-topbar-sub { font-size: 13px; color: var(--jay-text-2); }
+.jay-dot-sep { margin: 0 7px; color: var(--jay-faint); }
+.jay-warn-text { color: var(--jay-warning); }
+.jay-search-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  width: 100%;
+  padding: 0 8px 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--jay-border);
+  background: var(--jay-surface);
+  color: var(--jay-muted);
+  font-size: 13px;
+  transition: border-color var(--jay-dur), background var(--jay-dur);
+}
+.jay-search-trigger:hover { border-color: var(--jay-border-strong); color: var(--jay-text-2); }
+.jay-search-trigger-text { flex: 1; text-align: left; }
+.jay-search-trigger kbd {
+  font-family: var(--jay-font-mono);
+  font-size: 11px;
+  min-width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 1px solid var(--jay-border-strong);
+  color: var(--jay-muted);
+}
+.jay-topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.jay-topbar-avatar { border-radius: 999px; padding: 4px; }
+
+/* ── Overlays host ── */
+.jay-overlays { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+.jay-overlays > * { pointer-events: auto; }
+
+/* ── Bottom nav (phones) ── */
+.jay-bottomnav { display: none; }
+
+/* ── JAY mode: Hermes stays mounted (state, streams, timers intact) but is not
+   painted or focusable underneath JAY. ── */
+html[data-jay-mode="jay"] body > .app-titlebar,
+html[data-jay-mode="jay"] body > .layout { visibility: hidden; }
+
+/* ── Hermes mode: JAY shrinks to its rail; Hermes owns the rest ── */
+.jay-hermes-home { display: none; }
+@media (min-width: 768px) {
+  html[data-jay-mode="hermes"] body { padding-left: var(--jay-rail-w); }
+  html[data-jay-mode="hermes"] .jay-app { right: auto; width: var(--jay-rail-w); grid-template-columns: var(--jay-rail-w); background: transparent; }
+  html[data-jay-mode="hermes"] .jay-main { display: none; }
+}
+
+/* ── Responsive ── */
+@media (max-width: 1100px) {
+  .jay-topbar { grid-template-columns: minmax(0, 1fr) minmax(180px, 260px) auto; }
+}
+
+@media (max-width: 767.98px) {
+  .jay-app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .jay-rail { display: none; }
+  .jay-main { grid-row: 1; }
+  .jay-topbar {
+    display: flex;
+    height: auto;
+    min-height: 56px;
+    padding: env(safe-area-inset-top, 0px) 10px 0 16px;
+    gap: 8px;
+    background: var(--jay-bg);
+  }
+  .jay-brand { display: inline-flex; }
+  .jay-topbar-titles, .jay-search-trigger { display: none; }
+  .jay-topbar-actions { margin-left: auto; }
+  .jay-bottomnav {
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    align-items: stretch;
+    height: calc(var(--jay-bottomnav-h) + env(safe-area-inset-bottom, 0px));
+    padding: 0 8px env(safe-area-inset-bottom, 0px);
+    background: var(--jay-surface);
+    border-top: 1px solid var(--jay-border);
+  }
+  .jay-nav-btn.is-bottom {
+    width: auto;
+    height: auto;
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    margin: 6px 2px;
+  }
+  .jay-nav-btn.is-bottom:hover { background: transparent; }
+  .jay-nav-btn.is-bottom.is-active { background: transparent; color: var(--jay-text); }
+  .jay-nav-btn.is-bottom.is-active::before { display: none; }
+  .jay-nav-btn.is-bottom .jay-nav-badge { top: 2px; right: calc(50% - 22px); box-shadow: 0 0 0 2px var(--jay-surface); }
+  .jay-nav-label { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
+  .jay-nav-btn.is-jay .jay-nav-jay {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 32px;
+    border-radius: 12px;
+    background: var(--jay-accent-soft);
+  }
+  .jay-nav-btn.is-jay .jay-mark { background: var(--jay-accent); color: var(--jay-on-accent); width: 24px; height: 24px; border-radius: 8px; font-size: 13px; }
+  .jay-nav-btn.is-jay .jay-nav-label { color: var(--jay-accent-text); }
+
+  /* Immersive Jay conversation on phones */
+  .jay-app[data-route="talk"] .jay-topbar,
+  .jay-app[data-route="talk"] .jay-bottomnav { display: none; }
+
+  /* Hermes mode on phones: JAY steps aside entirely; a titlebar button returns. */
+  html[data-jay-mode="hermes"] .jay-app { inset: auto; width: 0; height: 0; overflow: visible; background: none; }
+  html[data-jay-mode="hermes"] .jay-rail,
+  html[data-jay-mode="hermes"] .jay-main,
+  html[data-jay-mode="hermes"] .jay-bottomnav { display: none; }
+  html[data-jay-mode="hermes"] .jay-hermes-home { display: inline-flex; }
+}
+
+/* Button JAY injects into Hermes' titlebar (styled with Hermes tokens). */
+.jay-hermes-home {
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px 0 4px;
+  margin-right: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: 600 12.5px var(--font-ui);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.jay-hermes-home .jay-mark { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; background: var(--text); color: var(--bg); }
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.jay-app) *, :where(.jay-app) *::before, :where(.jay-app) *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

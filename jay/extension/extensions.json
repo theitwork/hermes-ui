@@ -1,0 +1,29 @@
+{
+  "extensions": [
+    {
+      "id": "jay",
+      "name": "JAY",
+      "description": "JAY personal operating system shell for Hermes WebUI (mock-backed preview).",
+      "version": "0.1.0",
+      "stylesheets": [
+        "css/jay-tokens.css",
+        "css/jay-shell.css",
+        "css/jay-components.css",
+        "css/jay-home.css",
+        "css/jay-views.css"
+      ],
+      "scripts": [
+        "js/jay-core.js",
+        "js/jay-data-mock.js",
+        "js/jay-providers.js",
+        "js/jay-chat.js",
+        "js/jay-home.js",
+        "js/jay-tasks.js",
+        "js/jay-projects.js",
+        "js/jay-places.js",
+        "js/jay-shell.js",
+        "js/jay-boot.js"
+      ]
+    }
+  ]
+}

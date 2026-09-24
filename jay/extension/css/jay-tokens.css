@@ -1,0 +1,136 @@
+/* JAY customization — design tokens.
+   JAY surfaces read only --jay-* tokens. Both modes are designed separately and
+   follow Hermes' theme switch (the `.dark` class on <html>), so one toggle drives
+   Hermes and JAY together. */
+
+:root {
+  /* Light — warm ivory, editorial */
+  --jay-bg: #F5F2EA;
+  --jay-canvas: #EFEBE1;
+  --jay-surface: #FBFAF6;
+  --jay-surface-2: #F3F0E8;
+  --jay-surface-3: #ECE8DE;
+  --jay-elevated: #FFFFFF;
+  --jay-text: #22231F;
+  --jay-text-2: #5E5B52;
+  --jay-muted: #716D62;
+  --jay-faint: #B5B0A4;
+  --jay-border: rgba(40, 38, 30, 0.085);
+  --jay-border-strong: rgba(40, 38, 30, 0.15);
+  --jay-hover: rgba(40, 38, 30, 0.045);
+  --jay-press: rgba(40, 38, 30, 0.075);
+
+  --jay-accent: #3E7A4B;
+  --jay-accent-strong: #2F6A3D;
+  --jay-accent-soft: rgba(62, 122, 75, 0.10);
+  --jay-accent-softer: rgba(62, 122, 75, 0.06);
+  --jay-accent-text: #2E6139;
+  --jay-on-accent: #F8F6F0;
+
+  --jay-danger: #B04A3B;
+  --jay-danger-soft: rgba(176, 74, 59, 0.09);
+  --jay-warning: #8F5D0E;
+  --jay-warning-soft: rgba(162, 106, 18, 0.10);
+  --jay-info: #3D6A8E;
+  --jay-info-soft: rgba(61, 106, 142, 0.09);
+  --jay-neutral-soft: rgba(40, 38, 30, 0.06);
+
+  --jay-tone-1: #5E8F63;   /* sage   */
+  --jay-tone-2: #5B7896;   /* slate  */
+  --jay-tone-3: #B07A56;   /* clay   */
+  --jay-tone-4: #A8913F;   /* ochre  */
+  --jay-tone-5: #86708F;   /* heather*/
+
+  --jay-shadow-sm: 0 1px 2px rgba(40, 38, 30, 0.05);
+  --jay-shadow-md: 0 1px 2px rgba(40, 38, 30, 0.04), 0 8px 24px rgba(40, 38, 30, 0.06);
+  --jay-shadow-lg: 0 24px 64px rgba(40, 38, 30, 0.16), 0 2px 8px rgba(40, 38, 30, 0.06);
+  --jay-scrim: rgba(34, 33, 28, 0.28);
+  --jay-focus: 0 0 0 2px var(--jay-bg), 0 0 0 4px rgba(62, 122, 75, 0.55);
+
+  /* Shape, rhythm, type */
+  --jay-r-xs: 6px;
+  --jay-r-sm: 8px;
+  --jay-r-md: 12px;
+  --jay-r-lg: 16px;
+  --jay-r-pill: 999px;
+  --jay-gap: 16px;
+  --jay-pad: 16px;
+  --jay-rail-w: 72px;
+  --jay-topbar-h: 60px;
+  --jay-bottomnav-h: 64px;
+  --jay-font: var(--font-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif);
+  --jay-font-mono: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  --jay-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --jay-dur: 160ms;
+}
+
+:root.dark {
+  /* Dark — charcoal, calm, low glare (never pure black) */
+  --jay-bg: #101210;
+  --jay-canvas: #0D0F0D;
+  --jay-surface: #161916;
+  --jay-surface-2: #1B1E1A;
+  --jay-surface-3: #222621;
+  --jay-elevated: #20231F;
+  --jay-text: #F3F1EA;
+  --jay-text-2: #B8B7AE;
+  --jay-muted: #8E8F86;
+  --jay-faint: #5B5D56;
+  --jay-border: rgba(243, 241, 234, 0.075);
+  --jay-border-strong: rgba(243, 241, 234, 0.13);
+  --jay-hover: rgba(243, 241, 234, 0.045);
+  --jay-press: rgba(243, 241, 234, 0.08);
+
+  --jay-accent: #8DC086;
+  --jay-accent-strong: #9FCC98;
+  --jay-accent-soft: rgba(141, 192, 134, 0.12);
+  --jay-accent-softer: rgba(141, 192, 134, 0.07);
+  --jay-accent-text: #A9D4A2;
+  --jay-on-accent: #122012;
+
+  --jay-danger: #E5806F;
+  --jay-danger-soft: rgba(229, 128, 111, 0.12);
+  --jay-warning: #DDB064;
+  --jay-warning-soft: rgba(221, 176, 100, 0.12);
+  --jay-info: #8FB5D6;
+  --jay-info-soft: rgba(143, 181, 214, 0.11);
+  --jay-neutral-soft: rgba(243, 241, 234, 0.07);
+
+  --jay-tone-1: #8DC086;
+  --jay-tone-2: #8FA9C4;
+  --jay-tone-3: #D19D7A;
+  --jay-tone-4: #CDB76A;
+  --jay-tone-5: #B29BBB;
+
+  --jay-shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.025) inset;
+  --jay-shadow-md: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
+  --jay-shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --jay-scrim: rgba(4, 6, 4, 0.56);
+  --jay-focus: 0 0 0 2px var(--jay-bg), 0 0 0 4px rgba(141, 192, 134, 0.6);
+}
+
+/* ── "jay" skin: brings Hermes' own chrome (Chat, Files, Automations, Settings)
+   onto the JAY palette. Registered with registerHermesSkin() so it appears in
+   Settings → Appearance; these per-mode blocks refine it (higher specificity
+   than the single-mode block core injects for registered skins). ── */
+:root:not(.dark)[data-skin="jay"] {
+  --bg: #F5F2EA; --sidebar: #EFEBE1; --surface: #FBFAF6; --border: #E1DCD0;
+  --border2: rgba(40, 38, 30, 0.14); --text: #22231F; --muted: #6A665C;
+  --accent: #3E7A4B; --accent-hover: #2F6A3D; --accent-bg: rgba(62, 122, 75, 0.08);
+  --accent-bg-strong: rgba(62, 122, 75, 0.15); --accent-text: #2E6139;
+  --code-bg: #EFEBE2; --topbar-bg: rgba(239, 235, 225, 0.98); --main-bg: rgba(245, 242, 234, 0.6);
+  --focus-ring: rgba(62, 122, 75, 0.35); --focus-glow: rgba(62, 122, 75, 0.1);
+  --hover-bg: rgba(40, 38, 30, 0.05); --input-bg: rgba(40, 38, 30, 0.03);
+  --success: #3E7A4B; --warning: #A26A12; --error: #B04A3B; --info: #3D6A8E;
+}
+:root.dark[data-skin="jay"] {
+  --bg: #101210; --sidebar: #131513; --surface: #181B18; --border: #262A25;
+  --border2: rgba(243, 241, 234, 0.12); --text: #F3F1EA; --muted: #A3A39A;
+  --accent: #8DC086; --accent-hover: #7BB074; --accent-bg: rgba(141, 192, 134, 0.09);
+  --accent-bg-strong: rgba(141, 192, 134, 0.17); --accent-text: #A9D4A2;
+  --code-bg: #161916; --topbar-bg: rgba(19, 21, 19, 0.98); --main-bg: rgba(16, 18, 16, 0.6);
+  --focus-ring: rgba(141, 192, 134, 0.35); --focus-glow: rgba(141, 192, 134, 0.08);
+  --hover-bg: rgba(243, 241, 234, 0.055); --input-bg: rgba(243, 241, 234, 0.035);
+  --success: #8DC086; --warning: #DDB064; --error: #E5806F; --info: #8FB5D6;
+  --strong: #FFFFFF; --em: #B8B7AE;
+}
