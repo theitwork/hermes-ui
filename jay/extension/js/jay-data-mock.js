@@ -215,6 +215,15 @@
       { id: 'au-4', title: 'Weekly review prep', schedule: 'Fridays 16:00', state: 'ok' },
       { id: 'au-5', title: 'Invoice reminders', schedule: 'Mondays 09:00', state: 'ok' },
     ];
+    // Last 14 days of runs per automation: 1 = ran ok, 0 = not scheduled, -1 = failed.
+    const RUNS = {
+      'au-1': [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      'au-2': [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+      'au-3': [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1],
+      'au-4': [0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+      'au-5': [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+    };
+    automations.forEach((a) => { a.runs = RUNS[a.id] || []; a.lastRun = a.state === 'failed' ? minutesAgo(now, 18) : null; });
 
     const system = {
       checkedAt: now.toISOString(),
@@ -238,7 +247,99 @@
       { id: 'news', title: 'News', icon: 'news', text: 'A short, curated briefing.' },
     ];
 
-    return { now: now.toISOString(), user: { id: 'pat', name: 'Pat', context: 'Personal', workspace: 'Main' }, people, projects, tasks, agenda, attention, conversations, notes, files, activity, automations, system, integrations };
+    /* ── v2 enrichment: checklists, progress, activity trend, last event,
+       counts and feed fields. Deterministic (seeded by id) so the preview is stable. ── */
+    function seeded(seed) {
+      let x = 0;
+      for (let i = 0; i < seed.length; i += 1) x = (x * 33 + seed.charCodeAt(i)) >>> 0;
+      return () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; };
+    }
+    const CHECKLISTS = {
+      'Finalize company proposal': [['Pricing table', true], ['Scope and timeline', true], ['Phased rollout appendix', false], ['Final read', false]],
+      'Review Hermes voice bridge': [['Latency run', true], ['Wake-word noise test', false], ['Notes to Jay', false]],
+      'Schedule supplier call': [['Pick two slots', false], ['Send invite', false]],
+      'Send proposal to ABC Logistics': [['Phased option', true], ['Pricing sign-off', true], ['Cover email', false]],
+      'Follow up with Tony on hardware quote': [['12 laptops', true], ['2 firewalls', false]],
+      'Homepage copy review': [['Hero', true], ['Services', true], ['About', false], ['Contact', false]],
+      'Configure Hermes backup automation': [['Snapshot script', true], ['Object storage bucket', true], ['14-day retention', true], ['Restore test', false]],
+      'Mobile layout for JAY': [['Home', true], ['Tasks', true], ['Projects', false], ['Chat', false]],
+      'Prepare monthly expenses': [['Receipts', true], ['Bank export', false], ['Send to Karim', false]],
+      'Renewal quote approval': [['Compare with last year', true], ['Approve or counter', false]],
+      'Website hosting migration': [['DNS plan', true], ['Staging deploy', false], ['Cut-over', false]],
+      'Set up SSL monitoring for website': [['Pick monitor', false], ['Alert to Telegram', false]],
+      'Draft JAY attention rules': [['Priority levels', true], ['Snooze rules', false], ['Sources', false]],
+      'Collect testimonials for website': [['Shortlist clients', false], ['Send requests', false]],
+      'Renew car insurance': [['Get two quotes', false], ['Renew', false]],
+    };
+    const STATUS_PROGRESS = { inbox: 0, next: 8, in_progress: 40, waiting: 60, done: 100 };
+    const EVENTS = ['Comment', 'Edited', 'Status', 'File', 'Call', 'Review', 'Checklist'];
+    const OTHERS = ['jay', 'rana', 'karim', 'sarah', 'tony', 'antoine'];
+    tasks.forEach((t) => {
+      const r = seeded(t.id);
+      const list = CHECKLISTS[t.title];
+      t.checklist = list ? list.map(([text, done]) => ({ text, done: t.status === 'done' ? true : done })) : [];
+      t.progress = t.checklist.length
+        ? Math.round((t.checklist.filter((c) => c.done).length / t.checklist.length) * 100)
+        : STATUS_PROGRESS[t.status];
+      const busy = t.status === 'done' ? 0.25 : (t.status === 'in_progress' ? 1 : 0.6);
+      t.activity = Array.from({ length: 14 }, (_, i) => {
+        const v = r();
+        return v < 0.28 ? 0 : Math.round((1 + v * 6) * busy * (0.55 + i / 26));
+      });
+      t.comments = Math.floor(r() * 9);
+      t.attachments = Math.floor(r() * 5);
+      t.lastEvent = { at: t.updatedAt, label: EVENTS[Math.floor(r() * EVENTS.length)] };
+      const extra = OTHERS.filter((p) => p !== t.assignee);
+      t.watchers = [t.assignee].concat(extra.slice(Math.floor(r() * 3), Math.floor(r() * 3) + 1 + Math.floor(r() * 2)));
+    });
+
+    const STREAMS = {
+      'hermes-jay': ['Voice bridge', 'Home UI', 'jay-core', 'Ops'],
+      'company-website': ['Website Design', 'Content', 'Hosting'],
+      'business-ops': ['Proposals', 'Suppliers', 'Finance'],
+      personal: ['Health', 'Admin', 'Errands'],
+      home: ['Bills', 'Maintenance'],
+    };
+    projects.forEach((p) => {
+      p.streams = STREAMS[p.id] || [];
+      p.favorite = p.id === 'hermes-jay' || p.id === 'company-website';
+    });
+
+    // Feed fields for Attention (who did what to which target), keeping title/meta for detail views.
+    const FEED = {
+      'at-1': { actor: null, icon: 'automations', hue: 'red', verb: 'Backup failed on', target: 'Company file server', context: ['Automation', 'Daily 02:00'], attachment: { name: 'backup-0200.log', kind: 'log', meta: 'Log · 12 KB · stopped at 61%' } },
+      'at-2': { actor: null, icon: 'alert-triangle', hue: 'orange', verb: 'Overdue since yesterday', target: 'Send proposal to ABC Logistics', context: ['Business Operations', 'Urgent'] },
+      'at-3': { actor: 'tony', verb: 'is still waiting on', target: 'Hardware quote follow-up', context: ['Business Operations', 'Due 2 days ago'] },
+      'at-4': { actor: 'sarah', verb: 'requests approval for', target: 'Northwind renewal quote', context: ['Email', 'Business Operations'], attachment: { name: 'Northwind-renewal-2027.pdf', kind: 'pdf', meta: 'PDF · 240 KB · approve by Friday' } },
+      'at-5': { actor: 'tony', verb: 'proposed 16:30 for', target: 'Supplier call', context: ['Calendar', 'Clashes with rent transfer'] },
+      'at-6': { actor: 'mike', verb: 'hasn’t replied about', target: 'Supplier contract', context: ['Follow-up', 'Last contact 3 days ago'] },
+      'at-7': { actor: 'jay', verb: 'finished building', target: 'Voice bridge 0.4.2', context: ['Hermes / Jay', 'All checks passed'], attachment: { name: 'voice-bridge-0.4.2.zip', kind: 'zip', meta: 'ZIP · 18 MB' } },
+    };
+    attention.forEach((a) => Object.assign(a, FEED[a.id] || {}));
+    const approval = attention.find((a) => a.id === 'at-4');
+    if (approval) approval.actions = ['approve', 'decline'];
+
+    // Feed fields for project activity.
+    const ACT = {
+      'ac-1': { actor: 'jay', verb: 'added a task', target: 'Tune wake-word sensitivity', context: ['Voice bridge'] },
+      'ac-2': { actor: 'jay', verb: 'finished building', target: 'Voice bridge 0.4.2', context: ['Voice bridge'], attachment: { name: 'voice-bridge-0.4.2.zip', kind: 'zip', meta: 'ZIP · 18 MB' } },
+      'ac-3': { actor: 'pat', verb: 'completed', target: 'Migrate Hermes to OCI', context: ['Ops'] },
+      'ac-4': { actor: 'rana', verb: 'uploaded a file in', target: 'Homepage', context: ['Website Design'], attachment: { name: 'homepage-v3.fig', kind: 'fig', meta: 'Figma · 4.2 MB' } },
+      'ac-5': { actor: 'pat', verb: 'approved', target: 'Homepage wireframes', context: ['Website Design'] },
+      'ac-6': { actor: 'sarah', verb: 'sent', target: 'Northwind renewal quote', context: ['Finance'], attachment: { name: 'Northwind-renewal-2027.pdf', kind: 'pdf', meta: 'PDF · 240 KB' } },
+      'ac-7': { actor: 'pat', verb: 'updated the draft of', target: 'Khoury proposal', context: ['Proposals'], attachment: { name: 'Khoury-proposal-draft.docx', kind: 'doc', meta: 'Word · 212 KB' } },
+      'ac-8': { actor: 'karim', verb: 'filed', target: 'Quarterly VAT return', context: ['Finance'] },
+      'ac-9': { actor: 'jay', verb: 'summarised', target: 'Budget planning', context: ['Admin'], quote: 'Eleven subscriptions, about $214 a month. Two storage plans and two music services overlap.' },
+      'ac-10': { actor: 'pat', verb: 'completed', target: 'Fix kitchen tap', context: ['Maintenance'] },
+    };
+    activity.forEach((a) => Object.assign(a, ACT[a.id] || {}));
+    activity.push(
+      { id: 'ac-11', projectId: 'company-website', at: daysAgo(now, 2, 12), text: 'Rana commented on Service pages.', actor: 'rana', verb: 'commented on', target: 'Service pages copy', context: ['Content'], quote: 'Can we cut the governance page to one screen? It reads long on mobile.' },
+      { id: 'ac-12', projectId: 'hermes-jay', at: daysAgo(now, 1, 21), text: 'Pat added a note.', actor: 'pat', verb: 'added a note to', target: 'JAY information architecture', context: ['Home UI'] },
+      { id: 'ac-13', projectId: 'business-ops', at: daysAgo(now, 4, 14), text: 'Tony sent supplier quotes.', actor: 'tony', verb: 'uploaded a file in', target: 'Supplier quotes', context: ['Suppliers'], attachment: { name: 'supplier-quotes.xlsx', kind: 'xls', meta: 'Excel · 37 KB' } }
+    );
+
+    return { now: now.toISOString(), user:{ id: 'pat', name: 'Pat', context: 'Personal', workspace: 'Main' }, people, projects, tasks, agenda, attention, conversations, notes, files, activity, automations, system, integrations };
   }
 
   JAY.mock = { build };

@@ -1,112 +1,169 @@
-/* JAY customization — design tokens.
-   JAY surfaces read only --jay-* tokens. Both modes are designed separately and
-   follow Hermes' theme switch (the `.dark` class on <html>), so one toggle drives
-   Hermes and JAY together. */
+/* JAY customization — design tokens (v2: "floating panels + lime").
+   Reference direction: near-black canvas with floating rounded panels and a
+   lime accent (Deepsleep board), dense neutral data surfaces with tinted tag
+   chips, segmented meters and sparklines (Sales CRM table).
+   JAY surfaces read only --jay-* tokens. Both modes follow Hermes' `.dark`
+   class, so one toggle drives Hermes and JAY together. */
+
+/* Self-hosted type (SIL OFL 1.1 — see ../fonts/LICENSE-*.txt). No third-party requests. */
+@font-face { font-family: "JAY Inter"; src: url("../fonts/inter-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Inter"; src: url("../fonts/inter-latin-500-normal.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Inter"; src: url("../fonts/inter-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Inter"; src: url("../fonts/inter-latin-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Poppins"; src: url("../fonts/poppins-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Poppins"; src: url("../fonts/poppins-latin-500-normal.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Poppins"; src: url("../fonts/poppins-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Poppins"; src: url("../fonts/poppins-latin-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
 
 :root {
-  /* Light — warm ivory, editorial */
-  --jay-bg: #F5F2EA;
-  --jay-canvas: #EFEBE1;
-  --jay-surface: #FBFAF6;
-  --jay-surface-2: #F3F0E8;
-  --jay-surface-3: #ECE8DE;
-  --jay-elevated: #FFFFFF;
-  --jay-text: #22231F;
-  --jay-text-2: #5E5B52;
-  --jay-muted: #716D62;
-  --jay-faint: #B5B0A4;
-  --jay-border: rgba(40, 38, 30, 0.085);
-  --jay-border-strong: rgba(40, 38, 30, 0.15);
-  --jay-hover: rgba(40, 38, 30, 0.045);
-  --jay-press: rgba(40, 38, 30, 0.075);
+  /* ── Light — neutral paper, white panels, olive-lime accent ── */
+  --jay-canvas: #E6E6E2;      /* page behind floating panels */
+  --jay-bg: #EDEDEA;          /* legacy alias: page ground */
+  --jay-surface: #FFFFFF;     /* floating panels (.jay-box) */
+  --jay-surface-2: #F5F5F2;   /* cards / raised rows inside panels */
+  --jay-surface-3: #EAEAE6;   /* hover fills, neutral chips, active nav pill */
+  --jay-inset: #F0F0EC;       /* search fields, inset buttons, table head */
+  --jay-elevated: #FFFFFF;    /* drawers, menus, palette */
+  --jay-text: #161616;
+  --jay-text-2: #4D4D4D;
+  --jay-muted: #6B6B6B;
+  --jay-faint: #A3A3A3;
+  --jay-border: rgba(0, 0, 0, 0.075);
+  --jay-border-strong: rgba(0, 0, 0, 0.14);
+  --jay-hover: rgba(0, 0, 0, 0.04);
+  --jay-press: rgba(0, 0, 0, 0.07);
 
-  --jay-accent: #3E7A4B;
-  --jay-accent-strong: #2F6A3D;
-  --jay-accent-soft: rgba(62, 122, 75, 0.10);
-  --jay-accent-softer: rgba(62, 122, 75, 0.06);
-  --jay-accent-text: #2E6139;
-  --jay-on-accent: #F8F6F0;
+  --jay-accent: #A7E05F;          /* lime fill (buttons, logo, active bar, badges) */
+  --jay-accent-strong: #97D24C;   /* lime fill hover */
+  --jay-accent-text: #4A7A12;     /* lime-family text on light surfaces (5.1:1 on white) */
+  --jay-accent-soft: rgba(122, 184, 42, 0.16);
+  --jay-accent-softer: rgba(122, 184, 42, 0.09);
+  --jay-on-accent: #10190A;       /* text on lime fill */
 
-  --jay-danger: #B04A3B;
-  --jay-danger-soft: rgba(176, 74, 59, 0.09);
-  --jay-warning: #8F5D0E;
-  --jay-warning-soft: rgba(162, 106, 18, 0.10);
-  --jay-info: #3D6A8E;
-  --jay-info-soft: rgba(61, 106, 142, 0.09);
-  --jay-neutral-soft: rgba(40, 38, 30, 0.06);
+  --jay-danger: #D93B2B;
+  --jay-danger-soft: rgba(217, 59, 43, 0.10);
+  --jay-warning: #9A6A00;
+  --jay-warning-soft: rgba(214, 160, 20, 0.14);
+  --jay-info: #2F6FB2;
+  --jay-info-soft: rgba(47, 111, 178, 0.10);
+  --jay-good: #1E9E5A;            /* meters, sparklines, "online" */
+  --jay-neutral-soft: rgba(0, 0, 0, 0.055);
 
-  --jay-tone-1: #5E8F63;   /* sage   */
-  --jay-tone-2: #5B7896;   /* slate  */
-  --jay-tone-3: #B07A56;   /* clay   */
-  --jay-tone-4: #A8913F;   /* ochre  */
-  --jay-tone-5: #86708F;   /* heather*/
+  /* Tag / chart hues — text-safe on light surfaces */
+  --jay-hue-blue: #2563EB;
+  --jay-hue-purple: #7C3AED;
+  --jay-hue-green: #15803D;
+  --jay-hue-lime: #4A7A12;
+  --jay-hue-orange: #C2410C;
+  --jay-hue-red: #DC2626;
+  --jay-hue-yellow: #A16207;
+  --jay-hue-cyan: #0E7490;
+  --jay-hue-pink: #BE185D;
+  --jay-hue-neutral: #5C5C5C;
 
-  --jay-shadow-sm: 0 1px 2px rgba(40, 38, 30, 0.05);
-  --jay-shadow-md: 0 1px 2px rgba(40, 38, 30, 0.04), 0 8px 24px rgba(40, 38, 30, 0.06);
-  --jay-shadow-lg: 0 24px 64px rgba(40, 38, 30, 0.16), 0 2px 8px rgba(40, 38, 30, 0.06);
-  --jay-scrim: rgba(34, 33, 28, 0.28);
-  --jay-focus: 0 0 0 2px var(--jay-bg), 0 0 0 4px rgba(62, 122, 75, 0.55);
+  /* Segmented meter ramp (low → high) */
+  --jay-meter-1: #E5484D;
+  --jay-meter-2: #F08C3A;
+  --jay-meter-3: #E8C33A;
+  --jay-meter-4: #3DBE6E;
+  --jay-meter-off: rgba(0, 0, 0, 0.10);
+
+  /* Project tones map onto the hue palette */
+  --jay-tone-1: #7CB82A;
+  --jay-tone-2: #3B82F6;
+  --jay-tone-3: #EA7A2C;
+  --jay-tone-4: #D4A514;
+  --jay-tone-5: #8B5CF6;
+
+  --jay-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --jay-shadow-md: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 20px rgba(0, 0, 0, 0.05);
+  --jay-shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --jay-scrim: rgba(10, 10, 10, 0.32);
+  --jay-focus: 0 0 0 2px var(--jay-surface), 0 0 0 4px rgba(122, 184, 42, 0.6);
 
   /* Shape, rhythm, type */
   --jay-r-xs: 6px;
   --jay-r-sm: 8px;
-  --jay-r-md: 12px;
-  --jay-r-lg: 16px;
+  --jay-r-md: 10px;
+  --jay-r-lg: 14px;
+  --jay-r-xl: 18px;
   --jay-r-pill: 999px;
-  --jay-gap: 16px;
-  --jay-pad: 16px;
+  --jay-gap: 12px;            /* gap between floating panels */
+  --jay-pad: 16px;            /* panel inner padding */
   --jay-rail-w: 72px;
-  --jay-topbar-h: 60px;
+  --jay-side-w: 264px;        /* contextual side panel (tree nav) */
+  --jay-aside-w: 336px;       /* right feed panel */
+  --jay-topbar-h: 64px;
   --jay-bottomnav-h: 64px;
-  --jay-font: var(--font-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif);
+  --jay-font: "JAY Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --jay-font-display: "JAY Poppins", "JAY Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --jay-font-mono: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
   --jay-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   --jay-dur: 160ms;
 }
 
 :root.dark {
-  /* Dark — charcoal, calm, low glare (never pure black) */
-  --jay-bg: #101210;
-  --jay-canvas: #0D0F0D;
-  --jay-surface: #161916;
-  --jay-surface-2: #1B1E1A;
-  --jay-surface-3: #222621;
-  --jay-elevated: #20231F;
-  --jay-text: #F3F1EA;
-  --jay-text-2: #B8B7AE;
-  --jay-muted: #8E8F86;
-  --jay-faint: #5B5D56;
-  --jay-border: rgba(243, 241, 234, 0.075);
-  --jay-border-strong: rgba(243, 241, 234, 0.13);
-  --jay-hover: rgba(243, 241, 234, 0.045);
-  --jay-press: rgba(243, 241, 234, 0.08);
+  /* ── Dark — near-black canvas, charcoal floating panels, lime ── */
+  --jay-canvas: #0A0A0A;
+  --jay-bg: #0A0A0A;
+  --jay-surface: #1B1B1B;
+  --jay-surface-2: #242424;
+  --jay-surface-3: #2D2D2D;
+  --jay-inset: #141414;
+  --jay-elevated: #202020;
+  --jay-text: #F4F4F4;
+  --jay-text-2: #B5B5B5;
+  --jay-muted: #8C8C8C;
+  --jay-faint: #5E5E5E;
+  --jay-border: rgba(255, 255, 255, 0.065);
+  --jay-border-strong: rgba(255, 255, 255, 0.12);
+  --jay-hover: rgba(255, 255, 255, 0.045);
+  --jay-press: rgba(255, 255, 255, 0.08);
 
-  --jay-accent: #8DC086;
-  --jay-accent-strong: #9FCC98;
-  --jay-accent-soft: rgba(141, 192, 134, 0.12);
-  --jay-accent-softer: rgba(141, 192, 134, 0.07);
-  --jay-accent-text: #A9D4A2;
-  --jay-on-accent: #122012;
+  --jay-accent: #A7E05F;
+  --jay-accent-strong: #B9EC7B;
+  --jay-accent-text: #B4E878;
+  --jay-accent-soft: rgba(167, 224, 95, 0.14);
+  --jay-accent-softer: rgba(167, 224, 95, 0.07);
+  --jay-on-accent: #10190A;
 
-  --jay-danger: #E5806F;
-  --jay-danger-soft: rgba(229, 128, 111, 0.12);
-  --jay-warning: #DDB064;
-  --jay-warning-soft: rgba(221, 176, 100, 0.12);
-  --jay-info: #8FB5D6;
-  --jay-info-soft: rgba(143, 181, 214, 0.11);
-  --jay-neutral-soft: rgba(243, 241, 234, 0.07);
+  --jay-danger: #F26B5E;
+  --jay-danger-soft: rgba(242, 107, 94, 0.13);
+  --jay-warning: #F5C542;
+  --jay-warning-soft: rgba(245, 197, 66, 0.13);
+  --jay-info: #5FB0DF;
+  --jay-info-soft: rgba(95, 176, 223, 0.13);
+  --jay-good: #3CCB7F;
+  --jay-neutral-soft: rgba(255, 255, 255, 0.07);
 
-  --jay-tone-1: #8DC086;
-  --jay-tone-2: #8FA9C4;
-  --jay-tone-3: #D19D7A;
-  --jay-tone-4: #CDB76A;
-  --jay-tone-5: #B29BBB;
+  --jay-hue-blue: #7AAEFF;
+  --jay-hue-purple: #B09CFF;
+  --jay-hue-green: #5FD99A;
+  --jay-hue-lime: #B4E878;
+  --jay-hue-orange: #F6A55E;
+  --jay-hue-red: #FF8A7F;
+  --jay-hue-yellow: #F5CE5A;
+  --jay-hue-cyan: #5ED0EC;
+  --jay-hue-pink: #F58AC4;
+  --jay-hue-neutral: #BDBDBD;
 
-  --jay-shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.025) inset;
-  --jay-shadow-md: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
-  --jay-shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
-  --jay-scrim: rgba(4, 6, 4, 0.56);
-  --jay-focus: 0 0 0 2px var(--jay-bg), 0 0 0 4px rgba(141, 192, 134, 0.6);
+  --jay-meter-1: #E5484D;
+  --jay-meter-2: #F08C3A;
+  --jay-meter-3: #E8C33A;
+  --jay-meter-4: #3CCB7F;
+  --jay-meter-off: rgba(255, 255, 255, 0.10);
+
+  --jay-tone-1: #A7E05F;
+  --jay-tone-2: #5FB0DF;
+  --jay-tone-3: #F09A55;
+  --jay-tone-4: #F5C542;
+  --jay-tone-5: #A48BFF;
+
+  --jay-shadow-sm: none;
+  --jay-shadow-md: none;
+  --jay-shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --jay-scrim: rgba(0, 0, 0, 0.6);
+  --jay-focus: 0 0 0 2px var(--jay-surface), 0 0 0 4px rgba(167, 224, 95, 0.65);
 }
 
 /* ── "jay" skin: brings Hermes' own chrome (Chat, Files, Automations, Settings)
@@ -114,23 +171,23 @@
    Settings → Appearance; these per-mode blocks refine it (higher specificity
    than the single-mode block core injects for registered skins). ── */
 :root:not(.dark)[data-skin="jay"] {
-  --bg: #F5F2EA; --sidebar: #EFEBE1; --surface: #FBFAF6; --border: #E1DCD0;
-  --border2: rgba(40, 38, 30, 0.14); --text: #22231F; --muted: #6A665C;
-  --accent: #3E7A4B; --accent-hover: #2F6A3D; --accent-bg: rgba(62, 122, 75, 0.08);
-  --accent-bg-strong: rgba(62, 122, 75, 0.15); --accent-text: #2E6139;
-  --code-bg: #EFEBE2; --topbar-bg: rgba(239, 235, 225, 0.98); --main-bg: rgba(245, 242, 234, 0.6);
-  --focus-ring: rgba(62, 122, 75, 0.35); --focus-glow: rgba(62, 122, 75, 0.1);
-  --hover-bg: rgba(40, 38, 30, 0.05); --input-bg: rgba(40, 38, 30, 0.03);
-  --success: #3E7A4B; --warning: #A26A12; --error: #B04A3B; --info: #3D6A8E;
+  --bg: #F3F3F0; --sidebar: #ECECE8; --surface: #FFFFFF; --border: #DCDCD7;
+  --border2: rgba(0, 0, 0, 0.14); --text: #161616; --muted: #666666;
+  --accent: #4A7A12; --accent-hover: #3E6A0C; --accent-bg: rgba(122, 184, 42, 0.10);
+  --accent-bg-strong: rgba(122, 184, 42, 0.18); --accent-text: #3E6A0C;
+  --code-bg: #EFEFEB; --topbar-bg: rgba(236, 236, 232, 0.98); --main-bg: rgba(243, 243, 240, 0.6);
+  --focus-ring: rgba(122, 184, 42, 0.4); --focus-glow: rgba(122, 184, 42, 0.12);
+  --hover-bg: rgba(0, 0, 0, 0.05); --input-bg: rgba(0, 0, 0, 0.03);
+  --success: #1E9E5A; --warning: #9A6A00; --error: #D93B2B; --info: #2F6FB2;
 }
 :root.dark[data-skin="jay"] {
-  --bg: #101210; --sidebar: #131513; --surface: #181B18; --border: #262A25;
-  --border2: rgba(243, 241, 234, 0.12); --text: #F3F1EA; --muted: #A3A39A;
-  --accent: #8DC086; --accent-hover: #7BB074; --accent-bg: rgba(141, 192, 134, 0.09);
-  --accent-bg-strong: rgba(141, 192, 134, 0.17); --accent-text: #A9D4A2;
-  --code-bg: #161916; --topbar-bg: rgba(19, 21, 19, 0.98); --main-bg: rgba(16, 18, 16, 0.6);
-  --focus-ring: rgba(141, 192, 134, 0.35); --focus-glow: rgba(141, 192, 134, 0.08);
-  --hover-bg: rgba(243, 241, 234, 0.055); --input-bg: rgba(243, 241, 234, 0.035);
-  --success: #8DC086; --warning: #DDB064; --error: #E5806F; --info: #8FB5D6;
-  --strong: #FFFFFF; --em: #B8B7AE;
+  --bg: #0F0F0F; --sidebar: #161616; --surface: #1B1B1B; --border: #2A2A2A;
+  --border2: rgba(255, 255, 255, 0.12); --text: #F4F4F4; --muted: #A0A0A0;
+  --accent: #A7E05F; --accent-hover: #B9EC7B; --accent-bg: rgba(167, 224, 95, 0.10);
+  --accent-bg-strong: rgba(167, 224, 95, 0.18); --accent-text: #B4E878;
+  --code-bg: #161616; --topbar-bg: rgba(22, 22, 22, 0.98); --main-bg: rgba(15, 15, 15, 0.6);
+  --focus-ring: rgba(167, 224, 95, 0.4); --focus-glow: rgba(167, 224, 95, 0.1);
+  --hover-bg: rgba(255, 255, 255, 0.055); --input-bg: rgba(255, 255, 255, 0.035);
+  --success: #3CCB7F; --warning: #F5C542; --error: #F26B5E; --info: #5FB0DF;
+  --strong: #FFFFFF; --em: #B5B5B5;
 }

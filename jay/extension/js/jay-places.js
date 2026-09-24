@@ -1,11 +1,39 @@
-/* JAY customization — focused conversation, placeholder destinations and System.
-   Placeholders are honest: they explain what the area will do and never
-   pretend an integration is live. System links into real Hermes surfaces. */
+/* JAY customization — focused conversation wrapper, placeholder destinations
+   (Calendar, Notes, People), Integrations and System, as floating panels.
+   Placeholders are honest: they explain what the area will do, say "not
+   connected", and never pretend an integration is live. System links into the
+   real Hermes surfaces. Markup comes from JAY.h()/textContent and JAY.ui.*. */
 (function () {
   'use strict';
   const JAY = window.JAY;
   if (!JAY || !JAY.data) return;
   const { h, icon, fmt, mount } = JAY;
+  const UI = JAY.ui;
+  const DAY = 86400000;
+
+  function list(v) { return Array.isArray(v) ? v : []; }
+  function setHeader(route, cfg) {
+    if (JAY.shell && typeof JAY.shell.setHeader === 'function') JAY.shell.setHeader(Object.assign({ route }, cfg));
+  }
+  function go(hash) { location.hash = hash; }
+  function panelHead(title, opts) {
+    const o = opts || {};
+    return h('div', { class: 'jay-box-head jay-pl-head' },
+      o.icon ? h('span', { class: 'jay-pl-head-ic', 'aria-hidden': 'true' }, icon(o.icon, 16)) : null,
+      h('div', { class: 'jay-box-titles' }, h('h2', { class: 'jay-box-title' }, title), o.sub ? h('div', { class: 'jay-box-sub' }, o.sub) : null),
+      o.actions ? h('div', { class: 'jay-box-actions' }, o.actions) : null);
+  }
+  function daysAgo(d) { return Math.max(0, Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / DAY)); }
+  function agoLabel(d) {
+    const n = daysAgo(d);
+    if (n === 0) { const m = Math.round((Date.now() - new Date(d).getTime()) / 60000); return m < 60 ? Math.max(1, m) + 'm ago' : Math.round(m / 60) + 'h ago'; }
+    return n === 1 ? 'Yesterday' : n + 'd ago';
+  }
+  // CRM "Last Interaction" cell: "▢ Sep 18 | 6d ago"
+  function dateCell(d, label) {
+    return h('span', { class: 'jay-pl-date' }, icon('calendar', 13), h('span', null, fmt.dateShort(d)),
+      label ? h('span', { class: 'jay-sep', 'aria-hidden': 'true' }, '|') : null, label ? h('span', { class: 'jay-pl-date-l' }, label) : null);
+  }
 
   /* ── Talk (focused Jay conversation) ───────────────────────────────── */
   JAY.views = JAY.views || {};
@@ -15,53 +43,111 @@
     render(root) {
       const chat = JAY.chat.create({ mode: 'focus' });
       mount(root, h('div', { class: 'jay-talk-page' }, chat.el));
+      setHeader('talk', { title: 'Talk to Jay', pill: { label: 'Preview', hue: 'lime' }, crumbs: ['Local responder', 'Hermes chat stays one tap away'] });
       setTimeout(() => { if (!JAY.isMobile() || JAY.chat.shared.intent || JAY.chat.shared.draft) chat.focus(); }, 60);
       return () => chat.destroy();
     },
   };
 
-  /* ── Placeholder scaffold ──────────────────────────────────────────── */
+  /* ── Placeholder scaffold: hero panel + preview panel ──────────────── */
   function placeholder(cfg) {
     return {
       title: cfg.title,
       render(root) {
-        const hero = h('section', { class: 'jay-place-hero' },
-          h('span', { class: 'jay-place-icon', 'aria-hidden': 'true' }, icon(cfg.icon, 26)),
-          h('h2', { class: 'jay-place-headline' }, cfg.headline),
-          h('p', { class: 'jay-place-text' }, cfg.text),
-          h('ul', { class: 'jay-place-list' }, cfg.bullets.map((b) => h('li', null, icon('check', 15), b))),
-          h('div', { class: 'jay-place-actions' },
-            cfg.primary ? h('button', { type: 'button', class: 'jay-btn is-primary', onclick: cfg.primary.run }, cfg.primary.icon ? icon(cfg.primary.icon, 16) : null, cfg.primary.label) : null,
-            cfg.connect ? h('button', { type: 'button', class: 'jay-btn', disabled: true, 'aria-describedby': 'jayPlaceLater' }, icon('plug', 16), cfg.connect) : null),
-          cfg.connect ? h('p', { class: 'jay-place-later', id: 'jayPlaceLater' }, 'Connections arrive in a later phase. Credentials will be stored server-side, never in the browser.') : null);
-        const page = h('div', { class: ['jay-page', 'jay-place', 'is-' + cfg.key] },
-          h('header', { class: 'jay-page-head' },
-            h('div', { class: 'jay-page-titles' }, h('h1', { class: 'jay-page-title' }, cfg.title), h('span', { class: 'jay-pill is-quiet' }, cfg.badge || 'Not connected'))),
-          h('div', { class: 'jay-place-body' }, hero, cfg.preview ? cfg.preview() : null));
-        mount(root, page);
+        const laterId = JAY.nextId('later');
+        const hero = UI.box({ class: 'jay-pl-hero' },
+          h('div', { class: 'jay-pl-hero-top' },
+            h('span', { class: 'jay-pl-tile', 'aria-hidden': 'true' }, icon(cfg.icon, 22)),
+            UI.dotPill(cfg.badge || 'Not connected', cfg.badgeHue || 'neutral')),
+          h('h2', { class: 'jay-pl-headline' }, cfg.headline),
+          h('p', { class: 'jay-pl-text' }, cfg.text),
+          h('ul', { class: 'jay-pl-points' }, cfg.bullets.map((b) => h('li', null, h('span', { class: 'jay-pl-check', 'aria-hidden': 'true' }, icon('check', 13)), h('span', null, b)))),
+          h('div', { class: 'jay-pl-actions' },
+            cfg.primary ? h('button', { type: 'button', class: 'jay-btn is-primary is-lg', onclick: cfg.primary.run }, cfg.primary.icon ? icon(cfg.primary.icon, 16) : null, cfg.primary.label) : null,
+            cfg.connect ? h('button', { type: 'button', class: 'jay-btn is-outline is-lg', disabled: true, 'aria-describedby': laterId }, icon('plug', 16), cfg.connect) : null),
+          h('p', { class: 'jay-pl-later', id: laterId }, icon('lock', 14), h('span', null, cfg.connect
+            ? 'Not connected. Connections arrive in a later phase; credentials will live server-side, never in the browser.'
+            : 'Not connected yet. This area arrives in a later phase.')));
+        const preview = cfg.preview ? cfg.preview() : null;
+        mount(root, h('div', { class: ['jay-layout', 'jay-pl', 'is-' + cfg.key] }, hero, preview));
+        setHeader(cfg.key, { title: cfg.title, pill: { label: cfg.badge || 'Not connected', hue: cfg.badgeHue || 'neutral' }, crumbs: cfg.crumbs || [] });
         return cfg.cleanup || null;
       },
     };
   }
 
-  function calendarPreview() {
-    const days = [];
-    const start = new Date();
-    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    for (let i = 0; i < 7; i += 1) { const d = new Date(start); d.setDate(start.getDate() + i); days.push(d); }
-    const blocks = { 0: [[2, 2], [6, 1]], 1: [[1, 1], [4, 3]], 2: [[3, 2]], 3: [[1, 1], [3, 1], [6, 2]], 4: [[2, 3]], 5: [[5, 2]], 6: [] };
-    const todayIdx = (new Date().getDay() + 6) % 7;
-    return h('section', { class: 'jay-place-preview', 'aria-hidden': 'true' },
-      h('div', { class: 'jay-place-preview-label' }, 'Illustration'),
-      h('div', { class: 'jay-cal-ghost' }, days.map((d, i) => h('div', { class: ['jay-cal-day', i === todayIdx ? 'is-today' : ''] },
-        h('div', { class: 'jay-cal-dayname' }, d.toLocaleDateString(undefined, { weekday: 'short' }), h('span', null, String(d.getDate()))),
-        h('div', { class: 'jay-cal-slots' }, (blocks[i] || []).map(([top, len]) => h('span', { class: 'jay-cal-block', style: { gridRow: (top + 1) + ' / span ' + len } })))))));
+  function previewBox(cls, title, sub, body, extra) {
+    return UI.box({ class: ['jay-pl-preview', cls] },
+      panelHead(title, { sub, actions: [UI.tag(extra || 'Sample', { hue: 'neutral' })] }),
+      h('div', { class: 'jay-pl-preview-body' }, body));
   }
 
-  function sampleList(title, rows) {
-    return h('section', { class: 'jay-place-preview' },
-      h('div', { class: 'jay-place-preview-label' }, title),
-      rows);
+  /* Calendar: an illustrated week (no events are read). */
+  function calendarPreview() {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+    const todayIdx = (new Date().getDay() + 6) % 7;
+    // [startSlot, length, hue] — decorative blocks only.
+    const blocks = {
+      0: [[1, 2, 'blue'], [5, 1, 'lime']], 1: [[0, 1, 'purple'], [3, 3, 'blue']], 2: [[2, 2, 'orange']],
+      3: [[0, 1, 'lime'], [2, 1, 'blue'], [5, 2, 'purple']], 4: [[1, 3, 'orange']], 5: [[4, 2, 'pink']], 6: [],
+    };
+    const hours = ['09', '10', '11', '12', '13', '14', '15', '16'];
+    const grid = h('div', { class: 'jay-pl-week', 'aria-hidden': 'true' },
+      h('div', { class: 'jay-pl-week-hours' }, h('span', { class: 'jay-pl-week-corner' }), hours.map((hr) => h('span', null, hr + ':00'))),
+      days.map((d, i) => h('div', { class: ['jay-pl-day', i === todayIdx ? 'is-today' : ''] },
+        h('div', { class: 'jay-pl-day-head' }, h('span', { class: 'jay-pl-day-name' }, d.toLocaleDateString(undefined, { weekday: 'short' })), h('span', { class: 'jay-pl-day-num' }, String(d.getDate()))),
+        h('div', { class: 'jay-pl-day-slots' },
+          hours.map((_, r) => h('i', { class: 'jay-pl-cell', style: { gridRow: String(r + 1) } })),
+          (blocks[i] || []).map(([top, len, hue]) => h('span', { class: ['jay-pl-block', 'is-' + hue], style: { gridRow: (top + 1) + ' / span ' + len } }))))));
+    return previewBox('is-calendar', 'This week', 'Illustration — events appear once a calendar is connected', grid, 'Illustration');
+  }
+
+  /* Notes: real sample notes from the demo projects. */
+  function notesPreview() {
+    const body = h('div', { class: 'jay-pl-notes' }, UI.state('loading', { rows: 4 }));
+    (async () => {
+      try {
+        const projects = list(await JAY.data.getProjects());
+        const full = await Promise.all(projects.map((p) => JAY.data.getProject(p.id).catch(() => null)));
+        const notes = [];
+        full.filter((p) => p && !p.__state).forEach((p) => list(p.notes).forEach((n) => notes.push({ n, p })));
+        notes.sort((a, b) => new Date(b.n.updatedAt) - new Date(a.n.updatedAt));
+        if (!notes.length) { mount(body, UI.state('empty', { title: 'No notes in the demo data.', compact: true })); return; }
+        const HUE = { 1: 'lime', 2: 'blue', 3: 'orange', 4: 'yellow', 5: 'purple' };
+        mount(body, notes.slice(0, 6).map(({ n, p }) => h('article', { class: 'jay-pl-note' },
+          h('div', { class: 'jay-pl-note-top' }, UI.tag(p.title, { hue: HUE[p.tone] || 'neutral', solid: true }), h('span', { class: 'jay-pl-note-time' }, agoLabel(n.updatedAt))),
+          h('h3', { class: 'jay-pl-note-title' }, n.title),
+          h('p', { class: 'jay-pl-note-text' }, n.excerpt))));
+      } catch (_) { mount(body, UI.state('error', { title: 'Couldn’t load sample notes.', compact: true })); }
+    })();
+    return previewBox('is-notes', 'Sample notes', 'From your demo projects', body);
+  }
+
+  /* People: CRM-style table of the demo contacts. */
+  const RELATION = { client: 'blue', supplier: 'orange', partner: 'purple', family: 'green', friend: 'pink' };
+  function peoplePreview() {
+    const body = h('div', { class: 'jay-pl-ptable' }, UI.state('loading', { rows: 5 }));
+    (async () => {
+      try {
+        const [people, projects] = await Promise.all([JAY.data.getPeople(), JAY.data.getProjects().catch(() => [])]);
+        const ps = list(people).filter((p) => p.relation !== 'self' && p.relation !== 'assistant');
+        if (!ps.length) { mount(body, UI.state('empty', { title: 'No people in the demo data.', compact: true })); return; }
+        const TONE = { 1: 'lime', 2: 'blue', 3: 'orange', 4: 'yellow', 5: 'purple' };
+        const projOf = (id) => list(projects).filter((p) => list(p.people).includes(id)).map((p) => ({ label: p.title, hue: TONE[p.tone] || 'neutral' }));
+        mount(body,
+          h('div', { class: 'jay-pl-prow is-head', 'aria-hidden': 'true' }, h('span', null, 'Name'), h('span', null, 'Relation'), h('span', null, 'Projects'), h('span', null, 'Last contact')),
+          h('ul', { class: 'jay-pl-plist', 'aria-label': 'Sample people' }, ps.map((p) => h('li', { class: 'jay-pl-prow' },
+            h('span', { class: 'jay-pl-pname' }, UI.avatar(p.name, { id: p.id, size: 'md', decorative: true }),
+              h('span', { class: 'jay-pl-pname-main' }, h('span', { class: 'jay-pl-pname-t' }, p.name), h('span', { class: 'jay-pl-pname-r' }, p.role || ''))),
+            h('span', { class: 'jay-pl-prel' }, UI.tag(p.relation ? p.relation.charAt(0).toUpperCase() + p.relation.slice(1) : 'Contact', { hue: RELATION[p.relation] || 'neutral' })),
+            h('span', { class: 'jay-pl-pproj' }, projOf(p.id).length ? UI.tags(projOf(p.id), { max: 1 }) : h('span', { class: 'jay-pl-none' }, '—')),
+            h('span', { class: 'jay-pl-plast' }, p.lastContact ? dateCell(p.lastContact, agoLabel(p.lastContact)) : h('span', { class: 'jay-pl-none' }, 'No contact yet'))))));
+      } catch (_) { mount(body, UI.state('error', { title: 'Couldn’t load sample people.', compact: true })); }
+    })();
+    return previewBox('is-people', 'Sample people', 'Demo contacts — nothing is synced', body);
   }
 
   JAY.views.calendar = placeholder({
@@ -70,57 +156,91 @@
     text: 'JAY will merge events with your tasks, reminders and follow-ups into one calm view of your day and week.',
     bullets: ['Events alongside tasks and reminders', 'Conflicts surfaced in Attention', 'Ask Jay to find time or reschedule'],
     connect: 'Connect Calendar',
-    primary: { label: 'Ask Jay to plan my day', icon: 'chat', run: () => { JAY.chat.shared.draft = 'Plan my day around my calendar and tasks'; location.hash = '#/talk'; } },
+    crumbs: ['Week view', 'Illustration only'],
+    primary: { label: 'Ask Jay to plan my day', icon: 'chat', run: () => { JAY.chat.shared.draft = 'Plan my day around my calendar and tasks'; go('#/talk'); } },
     preview: calendarPreview,
   });
 
   JAY.views.notes = placeholder({
-    key: 'notes', title: 'Notes', icon: 'notes', badge: 'Coming soon',
+    key: 'notes', title: 'Notes', icon: 'notes', badge: 'Coming soon', badgeHue: 'blue',
     headline: 'Capture now, organise later.',
     text: 'Notes will collect ideas, meeting notes and research from your conversations with Jay and link them to projects and people.',
     bullets: ['Ideas captured from chat or voice', 'Linked to projects and people', 'Searchable alongside Hermes memory'],
-    primary: { label: 'Capture an idea', icon: 'lightbulb', run: () => { location.hash = '#/talk'; setTimeout(() => JAY.chat.prime('idea'), 80); } },
-    preview: () => {
-      const box = h('div', { class: 'jay-notes' });
-      JAY.data.getProject('hermes-jay').then((p) => mount(box, (p ? p.notes : []).map((n) => h('article', { class: 'jay-note-card' }, h('div', { class: 'jay-note-title' }, n.title), h('p', { class: 'jay-note-excerpt' }, n.excerpt))))).catch(() => {});
-      return sampleList('Sample notes from Hermes / Jay', box);
-    },
+    crumbs: ['Not connected', 'Sample notes below'],
+    primary: { label: 'Capture an idea', icon: 'lightbulb', run: () => { go('#/talk'); setTimeout(() => JAY.chat.prime('idea'), 80); } },
+    preview: notesPreview,
   });
 
   JAY.views.people = placeholder({
-    key: 'people', title: 'People', icon: 'people', badge: 'Coming soon',
+    key: 'people', title: 'People', icon: 'people', badge: 'Coming soon', badgeHue: 'blue',
     headline: 'The people behind your work and life.',
     text: 'People will track relationships, last contact and open follow-ups, so Jay can remind you who is waiting on you — and who you are waiting on.',
     bullets: ['Last contact and open threads', 'Follow-ups generated from conversations', 'Linked projects, notes and files'],
     connect: 'Connect Contacts',
-    preview: () => {
-      const box = h('ul', { class: 'jay-people is-grid' });
-      JAY.data.getPeople().then((ps) => mount(box, ps.filter((p) => p.relation !== 'self' && p.relation !== 'assistant').map((p) => h('li', { class: 'jay-person' },
-        h('span', { class: 'jay-avatar' }, fmt.initials(p.name)),
-        h('span', null, h('span', { class: 'jay-person-name' }, p.name), h('span', { class: 'jay-muted jay-person-role' }, p.role + (p.lastContact ? ' · ' + fmt.relative(p.lastContact).toLowerCase() : ''))))))).catch(() => {});
-      return sampleList('Sample people', box);
-    },
+    crumbs: ['Not connected', 'Sample contacts below'],
+    preview: peoplePreview,
   });
 
   /* ── Integrations ──────────────────────────────────────────────────── */
+  const INT_GROUP = { email: 'messaging', whatsapp: 'messaging', telegram: 'messaging', calendar: 'productivity', contacts: 'productivity', finance: 'life', weather: 'life', news: 'life' };
+  const INT_TABS = [['all', 'All'], ['messaging', 'Messaging'], ['productivity', 'Productivity'], ['life', 'Life']];
+  const INT_HUE = { calendar: 'blue', email: 'purple', whatsapp: 'green', telegram: 'cyan', contacts: 'orange', finance: 'yellow', weather: 'cyan', news: 'pink' };
+
   JAY.views.integrations = {
     title: 'Integrations',
     render(root) {
-      const grid = h('div', { class: 'jay-int-grid' });
-      mount(root, h('div', { class: 'jay-page jay-integrations' },
-        h('header', { class: 'jay-page-head' },
-          h('div', { class: 'jay-page-titles' }, h('h1', { class: 'jay-page-title' }, 'Integrations'), h('span', { class: 'jay-pill is-quiet' }, 'None connected'))),
-        h('p', { class: 'jay-page-lede' }, 'Integrations will feed Today and Attention and let Jay act on your behalf. None are connected in this preview, and nothing here can be set up yet.'),
-        grid,
-        h('p', { class: 'jay-note is-block' }, icon('lock', 15), 'When integrations arrive, credentials live server-side in jay-core — never in the browser, mock data or Git.')));
-      JAY.widget(grid, {
-        name: 'integrations', domains: ['integrations'], load: () => JAY.data.getIntegrations(), skeletonRows: 4,
-        render: (items) => items.map((it) => h('article', { class: 'jay-int-card' },
-          h('div', { class: 'jay-int-top' }, h('span', { class: 'jay-int-icon' }, icon(it.icon, 18)), h('span', { class: 'jay-pill is-quiet' }, 'Planned')),
+      let items = [];
+      let group = 'all';
+      const grid = h('div', { class: 'jay-int-grid' }, UI.state('loading', { rows: 4 }));
+      const tabsHost = h('div', { class: 'jay-int-tabs' });
+      function draw() {
+        const shown = group === 'all' ? items : items.filter((it) => (INT_GROUP[it.id] || 'other') === group);
+        if (!shown.length) { mount(grid, UI.box({ class: 'jay-pl-emptybox' }, UI.state('empty', { title: 'Nothing in this group yet.', compact: true }))); return; }
+        mount(grid, shown.map((it) => UI.box({ class: 'jay-int-card' },
+          h('div', { class: 'jay-int-top' },
+            h('span', { class: ['jay-feed-icon', 'jay-int-icon', 'is-' + (INT_HUE[it.id] || 'neutral')], 'aria-hidden': 'true' }, icon(it.icon, 18)),
+            UI.tag('Planned', { hue: 'neutral' })),
           h('h2', { class: 'jay-int-title' }, it.title),
           h('p', { class: 'jay-int-text' }, it.text),
-          h('div', { class: 'jay-int-foot' }, h('span', { class: 'jay-status-val is-offline' }, h('span', { class: 'jay-status-dot', 'aria-hidden': 'true' }), 'Not connected')))),
-      });
+          h('div', { class: 'jay-int-foot' },
+            UI.dotPill('Not connected', 'neutral'),
+            h('span', { class: 'jay-spacer' }),
+            h('button', { type: 'button', class: 'jay-btn is-inset is-sm', disabled: true, 'aria-label': 'Connect ' + it.title + ' (arrives in a later phase)' }, icon('plug', 14), 'Connect')))));
+      }
+      function drawTabs() {
+        const count = (g) => (g === 'all' ? items.length : items.filter((it) => (INT_GROUP[it.id] || 'other') === g).length);
+        mount(tabsHost, UI.tabs(INT_TABS.map(([id, label]) => ({ id, label, badge: count(id), badgeAccent: false })), {
+          variant: 'boxed', active: group, label: 'Integration groups',
+          onSelect: (g) => { group = g; draw(); },
+        }));
+      }
+      mount(root, h('div', { class: 'jay-layout jay-int' },
+        UI.box({ class: 'jay-int-bar' }, tabsHost,
+          h('p', { class: 'jay-int-note' }, icon('lock', 14), h('span', null, 'Credentials will live server-side in jay-core — never in the browser, mock data or Git.'))),
+        grid));
+      setHeader('integrations', { pill: { label: 'None connected', hue: 'neutral' }, crumbs: ['Planned integrations', 'Nothing can be set up yet'] });
+      drawTabs();
+      let disposed = false;
+      let seq = 0;
+      async function load() {
+        const my = ++seq;
+        if (!items.length) mount(grid, UI.state('loading', { rows: 4 }));
+        try {
+          const res = await JAY.data.getIntegrations();
+          if (disposed || my !== seq) return;
+          if (res && res.__state) { items = []; drawTabs(); mount(grid, UI.box({ class: 'jay-pl-emptybox' }, UI.state(res.__state))); return; }
+          items = list(res);
+          drawTabs();
+          if (!items.length) { mount(grid, UI.box({ class: 'jay-pl-emptybox' }, UI.state('empty', { title: 'No integrations planned.', compact: true }))); return; }
+          draw();
+        } catch (_) {
+          if (disposed || my !== seq) return;
+          mount(grid, UI.box({ class: 'jay-pl-emptybox' }, UI.state('error', { title: 'Couldn’t load integrations.', action: { label: 'Retry', icon: 'refresh', run: load } })));
+        }
+      }
+      load();
+      const off = JAY.on('data:integrations', load);
+      return () => { disposed = true; off(); };
     },
   };
 
@@ -135,6 +255,8 @@
   ];
   const SIM_DOMAINS = [['today', 'Today'], ['attention', 'Attention'], ['tasks', 'Tasks'], ['projects', 'Projects'], ['sessions', 'Continue'], ['system', 'Status']];
   const SIM_STATES = [['normal', 'Normal'], ['loading', 'Loading'], ['empty', 'Empty'], ['error', 'Error'], ['disconnected', 'Disconnected'], ['not-connected', 'Not connected']];
+  const STATE_HUE = { online: 'green', warning: 'yellow', offline: 'red' };
+  const STATUS_ICON = { jay: 'sparkle', hermes: 'server', voice: 'mic', automations: 'automations', oci: 'database' };
 
   function segmented(options, value, onPick, label) {
     const seg = h('div', { class: 'jay-segmented', role: 'radiogroup', 'aria-label': label });
@@ -148,11 +270,32 @@
     return seg;
   }
 
+  // Run cadence for the last 14 days, derived from the schedule text only
+  // (no run history exists yet): daily jobs run every day, weekly jobs once.
+  const WEEKDAYS = { sundays: 0, mondays: 1, tuesdays: 2, wednesdays: 3, thursdays: 4, fridays: 5, saturdays: 6 };
+  function cadence(a) {
+    const s = String(a.schedule || '').toLowerCase();
+    const wk = Object.keys(WEEKDAYS).find((k) => s.includes(k));
+    const today = new Date();
+    return Array.from({ length: 14 }, (_, i) => {
+      const d = new Date(today.getTime() - (13 - i) * DAY);
+      const runs = s.startsWith('daily') ? 1 : (wk && d.getDay() === WEEKDAYS[wk] ? 1 : 0);
+      if (i === 13 && a.state === 'failed') return 0;
+      return runs;
+    });
+  }
+  function scheduleCell(a) {
+    const m = /^(.*?)\s+(\d{1,2}:\d{2})$/.exec(String(a.schedule || ''));
+    return h('span', { class: 'jay-pl-date' }, icon('calendar', 13), h('span', null, m ? m[1] : (a.schedule || '—')),
+      m ? h('span', { class: 'jay-sep', 'aria-hidden': 'true' }, '|') : null, m ? h('span', { class: 'jay-pl-date-l' }, m[2]) : null);
+  }
+
   JAY.views.system = {
     title: 'System',
     render(root) {
-      const statusBox = h('div');
-      const autoBox = h('div');
+      const statusBox = h('div', { class: 'jay-box-body jay-sys-body' });
+      const autoBox = h('div', { class: 'jay-box-body jay-sys-body' });
+      const eventsBox = h('div', { class: 'jay-sys-events' });
       const themeNow = JAY.shell ? JAY.shell.themePreference() : 'dark';
       const sim = JAY.data.simulated();
       const simGrid = h('div', { class: 'jay-sim-grid' }, SIM_DOMAINS.map(([d, l]) => {
@@ -161,64 +304,95 @@
         sel.addEventListener('change', () => JAY.data.simulate(d, sel.value));
         return h('div', { class: 'jay-field is-inline' }, h('label', { class: 'jay-label', for: id }, l), sel);
       }));
+      const mockStatus = JAY.data.isMock('system');
 
-      mount(root, h('div', { class: 'jay-page jay-system' },
-        h('header', { class: 'jay-page-head' },
-          h('div', { class: 'jay-page-titles' }, h('h1', { class: 'jay-page-title' }, 'System'), h('span', { class: 'jay-page-count' }, 'JAY ' + JAY.version + ' · preview'))),
-        h('div', { class: 'jay-sys-grid' },
-          h('section', { class: 'jay-card jay-sys-status' },
-            h('div', { class: 'jay-block-head' }, h('h2', { class: 'jay-eyebrow' }, 'Jay status'), h('span', { class: 'jay-pill is-quiet' }, JAY.data.isMock('system') ? 'Sample data' : 'Hermes health')),
-            statusBox),
-          h('section', { class: 'jay-card' },
-            h('div', { class: 'jay-block-head' }, h('h2', { class: 'jay-eyebrow' }, 'Hermes'), h('span', { class: 'jay-pill is-ok' }, 'Live')),
-            h('p', { class: 'jay-card-lede' }, 'The full Hermes WebUI is still here, unchanged. These open the real Hermes panels.'),
-            h('ul', { class: 'jay-hermes-links' }, HERMES_LINKS.map((l) => h('li', null, h('button', {
-              type: 'button', class: 'jay-hlink', onclick: () => JAY.shell.openHermes(l.panel),
-            }, h('span', { class: 'jay-hlink-icon' }, icon(l.icon, 16)), h('span', { class: 'jay-hlink-main' }, h('span', { class: 'jay-hlink-title' }, l.label), h('span', { class: 'jay-muted' }, l.text)), icon('arrow-up-right', 15)))))),
-          h('section', { class: 'jay-card' },
-            h('div', { class: 'jay-block-head' }, h('h2', { class: 'jay-eyebrow' }, 'Automations'),
-              h('button', { type: 'button', class: 'jay-link', onclick: () => { location.hash = '#/automations'; } }, 'Scheduled jobs', icon('chevron-right', 14))),
-            autoBox),
-          h('section', { class: 'jay-card' },
-            h('div', { class: 'jay-block-head' }, h('h2', { class: 'jay-eyebrow' }, 'Appearance')),
-            h('div', { class: 'jay-field' }, h('span', { class: 'jay-label' }, 'Theme'),
-              segmented([['dark', 'Dark', 'moon'], ['light', 'Light', 'sun'], ['system', 'System', 'monitor']], themeNow, (v) => JAY.shell.setTheme(v), 'Theme')),
-            h('p', { class: 'jay-card-lede' }, 'Shared with Hermes. The “JAY” skin is also available in Hermes Settings → Appearance.')),
-          h('section', { class: 'jay-card' },
-            h('div', { class: 'jay-block-head' }, h('h2', { class: 'jay-eyebrow' }, 'Data sources')),
-            h('p', { class: 'jay-card-lede' }, 'Everything is mock by default. Two read-only Hermes bridges exist to prove the adapter swap; they only read and never send anything.'),
+      const main = h('div', { class: 'jay-sys-grid' },
+        UI.box({ class: 'jay-sys-card is-status' },
+          panelHead('Jay status', { icon: 'system', sub: mockStatus ? 'Services Jay depends on' : 'The Hermes row reads live /health', actions: [UI.dotPill(mockStatus ? 'Sample data' : 'Hermes health', mockStatus ? 'neutral' : 'green')] }),
+          statusBox),
+        UI.box({ class: 'jay-sys-card is-auto' },
+          panelHead('Automations', { icon: 'automations', sub: 'Runs, last 14 days (from schedule)', actions: [h('button', { type: 'button', class: 'jay-link', onclick: () => go('#/automations') }, 'Scheduled jobs', icon('chevron-right', 14))] }),
+          autoBox),
+        UI.box({ class: 'jay-sys-card is-hermes' },
+          panelHead('Hermes', { icon: 'server', sub: 'The full Hermes WebUI is still here, unchanged. These open the real Hermes panels.', actions: [UI.dotPill('Live', 'green')] }),
+          h('div', { class: 'jay-box-body' }, h('ul', { class: 'jay-hlinks' }, HERMES_LINKS.map((l) => h('li', null, h('button', {
+            type: 'button', class: 'jay-hlink', onclick: () => JAY.shell.openHermes(l.panel),
+          }, h('span', { class: 'jay-hlink-ic', 'aria-hidden': 'true' }, icon(l.icon, 17)),
+          h('span', { class: 'jay-hlink-main' }, h('span', { class: 'jay-hlink-title' }, l.label), h('span', { class: 'jay-hlink-text' }, l.text)),
+          icon('arrow-up-right', 15, 'jay-hlink-go'))))))),
+        UI.box({ class: 'jay-sys-card is-tools' },
+          panelHead('Preview tools', { icon: 'sliders', sub: 'Simulate widget states to review loading, empty, error and disconnected designs on Home.' }),
+          h('div', { class: 'jay-box-body' }, simGrid,
+            h('div', { class: 'jay-sys-actions' },
+              h('button', { type: 'button', class: 'jay-btn is-outline', onclick: () => { JAY.data.clearSimulations(); simGrid.querySelectorAll('select').forEach((s) => { s.value = 'normal'; }); UI.toast('Simulations cleared', { icon: 'check' }); } }, 'Clear simulations'),
+              h('button', { type: 'button', class: 'jay-btn is-outline is-danger', onclick: () => { JAY.data.resetDemo(); JAY.chat.shared.convId = 'main'; JAY.chat.shared.draft = ''; UI.toast('Demo data reset', { icon: 'refresh' }); } }, icon('refresh', 15), 'Reset demo data')))));
+
+      const aside = h('div', { class: 'jay-stack jay-sys-aside' },
+        UI.box({ class: 'jay-sys-card' },
+          panelHead('Appearance', { icon: 'sun' }),
+          h('div', { class: 'jay-box-body' },
+            segmented([['dark', 'Dark', 'moon'], ['light', 'Light', 'sun'], ['system', 'System', 'monitor']], themeNow, (v) => JAY.shell.setTheme(v), 'Theme'),
+            h('p', { class: 'jay-sys-lede' }, 'Shared with Hermes. The “JAY” skin is also available in Hermes Settings → Appearance.'))),
+        UI.box({ class: 'jay-sys-card' },
+          panelHead('Data sources', { icon: 'database', sub: 'Mock by default. The Hermes bridges only read and never send anything.' }),
+          h('div', { class: 'jay-box-body jay-sys-sources' },
             h('div', { class: 'jay-field' }, h('span', { class: 'jay-label' }, 'Continue (recent work)'),
               segmented([['mock', 'Mock'], ['hermes', 'Hermes sessions']], JAY.data.adapterName('sessions'), (v) => JAY.data.useAdapter('sessions', v), 'Continue data source')),
             h('div', { class: 'jay-field' }, h('span', { class: 'jay-label' }, 'Status'),
-              segmented([['mock', 'Mock'], ['hermes', 'Hermes health']], JAY.data.adapterName('system'), (v) => JAY.data.useAdapter('system', v), 'Status data source'))),
-          h('section', { class: 'jay-card' },
-            h('div', { class: 'jay-block-head' }, h('h2', { class: 'jay-eyebrow' }, 'Preview tools')),
-            h('p', { class: 'jay-card-lede' }, 'Simulate widget states to review loading, empty, error and disconnected designs on Home.'),
-            simGrid,
-            h('div', { class: 'jay-card-actions' },
-              h('button', { type: 'button', class: 'jay-btn is-ghost', onclick: () => { JAY.data.clearSimulations(); simGrid.querySelectorAll('select').forEach((s) => { s.value = 'normal'; }); JAY.ui.toast('Simulations cleared', { icon: 'check' }); } }, 'Clear simulations'),
-              h('button', { type: 'button', class: 'jay-btn is-ghost is-danger', onclick: () => { JAY.data.resetDemo(); JAY.chat.shared.convId = 'main'; JAY.chat.shared.draft = ''; JAY.ui.toast('Demo data reset', { icon: 'refresh' }); } }, icon('refresh', 15), 'Reset demo data'))))));
+              segmented([['mock', 'Mock'], ['hermes', 'Hermes health']], JAY.data.adapterName('system'), (v) => JAY.data.useAdapter('system', v), 'Status data source')))),
+        UI.box({ class: ['jay-sys-card', 'is-events'] },
+          panelHead('Recent events', { icon: 'history', sub: 'From automations and Hermes' }),
+          eventsBox));
+
+      mount(root, h('div', { class: 'jay-layout has-aside jay-sys' }, main, aside));
+      setHeader('system', { pill: { label: 'Preview', hue: 'lime' }, crumbs: ['JAY ' + JAY.version, mockStatus ? 'Sample data' : 'Hermes health bridge on'] });
 
       const w1 = JAY.widget(statusBox, {
         name: 'system-status', domains: ['system'], load: () => JAY.data.getSystemStatus(), isEmpty: () => false, skeletonRows: 5,
         render: (st) => h('div', null,
-          h('ul', { class: 'jay-sys-list' }, st.items.map((it) => h('li', { class: 'jay-sys-row' },
-            h('span', { class: 'jay-sys-name' }, it.label),
-            h('span', { class: 'jay-muted jay-sys-detail' }, it.detail || ''),
-            h('span', { class: ['jay-status-val', 'is-' + it.state] }, h('span', { class: 'jay-status-dot', 'aria-hidden': 'true' }), it.value)))),
-          h('div', { class: 'jay-status-foot' }, h('span', null, 'Last check'), h('span', null, fmt.time(st.checkedAt)),
-            h('button', { type: 'button', class: 'jay-link', onclick: () => w1.refresh() }, icon('refresh', 13), 'Check now'))),
+          h('ul', { class: 'jay-sys-rows' }, list(st.items).map((it) => {
+            const disk = /(\d{1,3})%\s*disk/i.exec(it.detail || '');
+            return h('li', { class: 'jay-sys-row' },
+              h('span', { class: 'jay-sys-ic', 'aria-hidden': 'true' }, icon(STATUS_ICON[it.key] || 'circle', 15)),
+              h('span', { class: 'jay-sys-main' }, h('span', { class: 'jay-sys-name' }, it.label), h('span', { class: 'jay-sys-detail' }, it.detail || '')),
+              disk ? h('span', { class: 'jay-sys-meter' }, UI.meter(Number(disk[1]), { segments: 12, label: 'Disk used' })) : h('span', { class: 'jay-sys-meter' }),
+              UI.dotPill(it.value, STATE_HUE[it.state] || 'neutral'));
+          })),
+          h('div', { class: 'jay-sys-foot' },
+            h('span', null, 'Last check ', h('strong', null, fmt.time(st.checkedAt))),
+            h('span', { class: 'jay-spacer' }),
+            h('button', { type: 'button', class: 'jay-btn is-inset is-sm', onclick: () => w1.refresh() }, icon('refresh', 14), 'Check now'))),
         states: { disconnected: { title: 'Status service unreachable', compact: true } },
       });
       const w2 = JAY.widget(autoBox, {
         name: 'automations', domains: ['system'], load: () => JAY.data.getAutomations(), skeletonRows: 4,
-        render: (items) => h('ul', { class: 'jay-sys-list' }, items.map((a) => h('li', { class: 'jay-sys-row' },
-          h('span', { class: 'jay-sys-name' }, a.title),
-          h('span', { class: 'jay-muted jay-sys-detail' }, a.schedule),
-          h('span', { class: ['jay-status-val', a.state === 'failed' ? 'is-offline' : 'is-online'] }, h('span', { class: 'jay-status-dot', 'aria-hidden': 'true' }), a.state === 'failed' ? 'Failed' : 'OK')))),
+        render: (items) => h('ul', { class: 'jay-sys-rows' }, list(items).map((a) => {
+          const failed = a.state === 'failed';
+          return h('li', { class: ['jay-sys-row', 'is-auto', failed ? 'is-failed' : ''] },
+            h('span', { class: 'jay-sys-ic', 'aria-hidden': 'true' }, icon(failed ? 'alert-triangle' : 'repeat', 15)),
+            h('span', { class: 'jay-sys-main' }, h('span', { class: 'jay-sys-name' }, a.title), scheduleCell(a)),
+            UI.spark(cadence(a), { hue: failed ? 'red' : null, label: 'Scheduled runs, last 14 days' + (failed ? ', last run failed' : '') }),
+            UI.dotPill(failed ? 'Failed' : 'OK', failed ? 'red' : 'green'));
+        })),
         empty: { title: 'No automations yet.', compact: true },
       });
-      return () => { w1.dispose(); w2.dispose(); };
+      const w3 = JAY.widget(eventsBox, {
+        name: 'system-events', domains: ['attention', 'system'], skeletonRows: 3,
+        load: async () => {
+          const items = await JAY.data.getAttentionItems();
+          if (items && items.__state) return items;
+          return list(items).filter((a) => a.source === 'automation');
+        },
+        render: (items) => items.map((a) => UI.feedItem({
+          who: a.actor ? { id: a.actor, name: a.actor === 'jay' ? 'Jay' : (a.personName || a.actor) } : null,
+          icon: a.icon || 'automations', hue: a.hue || (a.level === 'critical' ? 'red' : 'neutral'),
+          verb: a.verb || a.title, target: a.verb ? a.target : null,
+          context: list(a.context), time: agoLabel(a.at), attachment: a.attachment || null,
+          level: a.level, unread: a.level === 'critical',
+        })),
+        empty: { title: 'No recent events.', compact: true },
+      });
+      return () => { w1.dispose(); w2.dispose(); w3.dispose(); };
     },
   };
 })();

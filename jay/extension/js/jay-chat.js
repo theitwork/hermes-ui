@@ -2,8 +2,10 @@
    One component, two layouts: the Home dock and the focused conversation
    (full view on desktop, full-screen on phones). Phase 1 is mock-only: replies
    come from a small local responder and nothing is sent to Hermes or any LLM.
-   Visual language follows Hermes' chat: compact right-aligned user bubbles,
-   prose-first assistant turns, a quiet composer with transparent chips. */
+   v2 look: a floating panel with a lime "J", "Jay ● Preview" and
+   "Personal | Main" crumbs; right-aligned surface-3 user bubbles,
+   prose-first Jay turns, outlined quick pills (lime when active) and an
+   inset composer with attach / mic / context chips and a lime send square. */
 (function () {
   'use strict';
   const JAY = window.JAY;
@@ -122,18 +124,21 @@
     const attachments = [];
 
     const contextBtn = h('button', { type: 'button', class: 'jay-talk-context', 'aria-haspopup': 'menu', onclick: (e) => openContextMenu(e.currentTarget) });
-    const previewPill = h('span', { class: 'jay-pill is-quiet', title: 'Replies are generated locally. Nothing is sent to Hermes in this preview.' }, 'Preview');
+    const previewPill = JAY.ui.dotPill('Preview', 'lime');
+    previewPill.classList.add('jay-talk-pill');
+    previewPill.title = 'Replies are generated locally. Nothing is sent to Hermes in this preview.';
 
     const headActions = h('div', { class: 'jay-talk-actions' },
-      h('button', { type: 'button', class: 'jay-icon-btn', 'aria-label': 'New conversation', 'data-tip': 'New conversation', onclick: newConversation }, icon('compose', 18)),
+      o.mode === 'focus' ? h('button', { type: 'button', class: 'jay-btn is-outline is-sm jay-hide-mobile', onclick: () => { location.hash = '#/chat'; } }, icon('chat', 15), 'Hermes chat') : null,
+      h('button', { type: 'button', class: 'jay-circle-btn', 'aria-label': 'New conversation', 'data-tip': 'New conversation', onclick: newConversation }, icon('compose', 16)),
       o.mode === 'dock'
-        ? h('button', { type: 'button', class: 'jay-icon-btn', 'aria-label': 'Open full conversation', 'data-tip': 'Expand', onclick: () => { saveDraft(); location.hash = '#/talk'; } }, icon('expand', 17))
-        : h('button', { type: 'button', class: 'jay-btn is-ghost is-sm jay-hide-mobile', onclick: () => { location.hash = '#/chat'; } }, icon('chat', 15), 'Hermes chat'));
+        ? h('button', { type: 'button', class: 'jay-circle-btn', 'aria-label': 'Open full conversation', 'data-tip': 'Expand', onclick: () => { saveDraft(); location.hash = '#/talk'; } }, icon('expand', 15))
+        : null);
 
     const head = h('header', { class: 'jay-talk-head' },
       o.mode === 'focus' ? h('button', { type: 'button', class: 'jay-icon-btn jay-talk-back', 'aria-label': 'Back', onclick: () => { saveDraft(); if (history.length > 1) history.back(); else location.hash = '#/home'; } }, icon('arrow-left', 20)) : null,
       h('div', { class: 'jay-talk-id' },
-        h('span', { class: 'jay-mark is-sm', 'aria-hidden': 'true' }, 'J'),
+        JAY.ui.avatar('Jay', { id: 'jay', size: 'lg', decorative: true }),
         h('div', { class: 'jay-talk-titles' },
           h('div', { class: 'jay-talk-name' }, h('h2', null, 'Jay'), previewPill),
           contextBtn)),
@@ -142,18 +147,25 @@
     const scroll = h('div', { class: 'jay-talk-scroll', role: 'log', 'aria-live': 'polite', 'aria-label': 'Conversation with Jay' });
     const thread = h('div', { class: 'jay-thread' });
     scroll.appendChild(thread);
+    // Stay pinned to the latest message while the panel resizes (fonts, sibling
+    // panels loading, the composer growing) unless the reader scrolled up.
+    let pinned = true;
+    scroll.addEventListener('scroll', () => { pinned = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 40; }, { passive: true });
+    const resizeObs = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (pinned) scroll.scrollTop = scroll.scrollHeight; }) : null;
+    if (resizeObs) { resizeObs.observe(scroll); resizeObs.observe(thread); }
 
     const textarea = h('textarea', { class: 'jay-composer-input', rows: '1', placeholder: DEFAULT_PLACEHOLDER, 'aria-label': 'Message Jay', enterkeyhint: 'send' });
     const intentTag = h('div', { class: 'jay-intent-tag', hidden: true });
     const attachTray = h('div', { class: 'jay-attach-tray', hidden: true });
     const fileInput = h('input', { type: 'file', class: 'jay-sr-only', multiple: true, tabindex: '-1', 'aria-hidden': 'true' });
-    const sendBtn = h('button', { type: 'button', class: 'jay-send', 'aria-label': 'Send', disabled: true, onclick: send }, icon('arrow-up', 18));
+    const sendBtn = h('button', { type: 'button', class: 'jay-send', 'aria-label': 'Send', disabled: true, onclick: send }, icon('send', 17));
     const micBtn = h('button', { type: 'button', class: 'jay-icon-btn is-sm', 'aria-label': 'Dictate', 'aria-pressed': 'false', 'data-tip': 'Voice', onclick: toggleMic }, icon('mic', 17));
     const listenBar = h('div', { class: 'jay-listen', hidden: true, role: 'status' },
       h('span', { class: 'jay-listen-wave', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'), h('i'), h('i')),
       h('span', null, 'Listening… (voice preview)'),
       h('button', { type: 'button', class: 'jay-link', onclick: () => stopMic(true) }, 'Stop'));
-    const composerContext = h('span', { class: 'jay-chip is-static', title: 'Context Jay will use' }, icon('user', 14), h('span', { class: 'jay-chip-label' }, shared.context));
+    const composerContext = h('button', { type: 'button', class: 'jay-cchip', 'aria-haspopup': 'menu', title: 'Context Jay will use', onclick: (e) => openContextMenu(e.currentTarget) },
+      icon('user', 14), h('span', { class: 'jay-chip-label' }, shared.context), icon('chevron-down', 13, 'jay-cchip-chev'));
 
     const composer = h('div', { class: 'jay-composer' },
       intentTag, attachTray, listenBar, textarea,
@@ -163,7 +175,7 @@
           micBtn,
           h('span', { class: 'jay-composer-divider', 'aria-hidden': 'true' }),
           composerContext,
-          h('span', { class: 'jay-chip is-static jay-hide-narrow', title: 'Replies are generated locally in this preview' }, icon('sparkle', 14), h('span', { class: 'jay-chip-label' }, 'Local preview'))),
+          h('span', { class: 'jay-cchip is-static jay-hide-narrow', title: 'Replies are generated locally in this preview' }, icon('sparkle', 14), h('span', { class: 'jay-chip-label' }, 'Local preview'))),
         sendBtn),
       fileInput);
 
@@ -174,7 +186,50 @@
       }, icon(q.icon, 14), q.label)));
 
     const foot = h('div', { class: 'jay-talk-foot' }, quick, composer);
-    const el = h('section', { class: ['jay-talk', 'is-' + o.mode], 'aria-label': 'Talk to Jay' }, head, scroll, foot);
+    const el = JAY.ui.box({ class: ['jay-talk', 'is-col', 'is-' + o.mode], 'aria-label': 'Talk to Jay' }, head, scroll, foot);
+
+    /* Focus view on wide screens: Deepsleep-style conversation tree beside the
+       thread (the shared .jay-layout.has-side hides it below 1024px). */
+    let side = null;
+    let sideSeq = 0;
+    let sideQuery = '';
+    const root = o.mode === 'focus' ? h('div', { class: 'jay-layout has-side is-fill jay-talk-layout' }, el) : el;
+    function filterSide(q) {
+      sideQuery = String(q || '').trim().toLowerCase();
+      if (!side) return;
+      side.querySelectorAll('.jay-side-item').forEach((b) => {
+        const label = (b.querySelector('.jay-side-label') || b).textContent.toLowerCase();
+        b.parentElement.hidden = !!sideQuery && !label.includes(sideQuery);
+      });
+    }
+    async function renderSide() {
+      if (o.mode !== 'focus') return;
+      const my = ++sideSeq;
+      let sessions = [];
+      try { const r = await JAY.data.getRecentSessions(); sessions = Array.isArray(r) ? r : []; } catch (_) { sessions = []; }
+      if (my !== sideSeq) return;
+      const mine = sessions.filter((c) => c.source !== 'hermes');
+      if (convId !== 'main' && conversation && !mine.some((c) => c.id === convId)) {
+        mine.unshift({ id: convId, title: conversation.title || 'New conversation' });
+      }
+      const next = JAY.ui.sideNav({
+        label: 'Conversations',
+        search: { placeholder: 'Search conversations', onInput: filterSide },
+        sections: [
+          { id: 'pinned', title: 'Pinned', items: [{ id: 'main', label: 'Main', icon: 'message-circle', active: convId === 'main', run: () => load('main') }] },
+          { id: 'recent', title: 'Recent', items: mine.map((c) => ({ id: c.id, label: c.title, icon: 'chat', active: c.id === convId, run: () => load(c.id) })) },
+        ],
+        footer: { label: 'New conversation', icon: 'plus', run: newConversation },
+      });
+      next.classList.add('jay-talk-side');
+      const searchInput = side ? side.querySelector('input') : null;
+      const hadFocus = searchInput && document.activeElement === searchInput;
+      if (side && side.isConnected) side.replaceWith(next); else root.insertBefore(next, el);
+      side = next;
+      const input = side.querySelector('input');
+      if (input && sideQuery) { input.value = sideQuery; filterSide(sideQuery); }
+      if (hadFocus && input) input.focus();
+    }
 
     /* ── behaviours ── */
     function saveDraft() { shared.draft = textarea.value; shared.convId = convId; }
@@ -231,30 +286,31 @@
 
     function updateHeader() {
       const title = conversation ? conversation.title : 'Main';
-      mount(contextBtn, h('span', null, shared.context), h('span', { class: 'jay-dot-sep', 'aria-hidden': 'true' }, '•'), h('span', { class: 'jay-talk-conv' }, title), icon('chevron-down', 14));
+      mount(contextBtn, h('span', null, shared.context), h('span', { class: 'jay-sep', 'aria-hidden': 'true' }, '|'), h('span', { class: 'jay-talk-conv' }, title), icon('chevron-down', 14));
       contextBtn.setAttribute('aria-label', 'Context: ' + shared.context + ', conversation: ' + title + '. Change context');
     }
 
     function messageNode(m) {
       if (m.role === 'user') {
         return h('div', { class: 'jay-msg is-user' }, h('div', { class: 'jay-bubble' }, m.text),
-          h('div', { class: 'jay-msg-meta' }, fmt.time(m.at)));
+          h('div', { class: 'jay-msg-meta' }, h('span', null, fmt.time(m.at))));
       }
       return h('div', { class: 'jay-msg is-jay' },
-        h('span', { class: 'jay-mark is-xs', 'aria-hidden': 'true' }, 'J'),
+        JAY.ui.avatar('Jay', { id: 'jay', size: 'sm', decorative: true }),
         h('div', { class: 'jay-msg-body' },
           h('div', { class: 'jay-msg-text' }, m.text),
           m.link ? h('button', { type: 'button', class: 'jay-msg-link', onclick: () => { location.hash = m.link.route; } }, m.link.label, icon('arrow-right', 14)) : null,
-          h('div', { class: 'jay-msg-meta' }, fmt.time(m.at), m.local ? h('span', { class: 'jay-msg-local' }, ' · local preview reply') : null)));
+          h('div', { class: 'jay-msg-meta' }, h('span', { class: 'jay-msg-who' }, 'Jay'), h('span', null, fmt.time(m.at)), m.local ? h('span', { class: 'jay-msg-local' }, 'local preview reply') : null)));
     }
 
     function emptyNode() {
       return h('div', { class: 'jay-talk-empty' },
+        JAY.ui.avatar('Jay', { id: 'jay', size: 'xl', decorative: true }),
         h('div', { class: 'jay-talk-greeting' }, fmt.greeting() + ', Pat.'),
         h('div', { class: 'jay-talk-prompt' }, 'What should we take care of?'),
         h('div', { class: 'jay-talk-suggest' },
           ['What should I focus on today?', 'Remind me to call the bank at 4pm', 'What’s overdue?'].map((s) =>
-            h('button', { type: 'button', class: 'jay-suggest', onclick: () => { textarea.value = s; autosize(); send(); } }, icon('arrow-right', 14), s))));
+            h('button', { type: 'button', class: 'jay-suggest', onclick: () => { textarea.value = s; autosize(); send(); } }, h('span', null, s), icon('arrow-up-right', 15)))));
     }
 
     function renderThread() {
@@ -270,6 +326,7 @@
         nodes.push(messageNode(m));
       });
       mount(thread, nodes);
+      pinned = true;
       requestAnimationFrame(() => { scroll.scrollTop = scroll.scrollHeight; });
     }
 
@@ -286,6 +343,7 @@
       }
       updateHeader();
       renderThread();
+      renderSide();
     }
 
     async function newConversation() {
@@ -294,12 +352,13 @@
       conversation = { id: convId, title: 'New conversation', messages: [] };
       updateHeader();
       renderThread();
+      renderSide();
       prime(null);
     }
 
     function showTyping() {
       const t = h('div', { class: 'jay-msg is-jay is-typing', 'aria-label': 'Jay is typing' },
-        h('span', { class: 'jay-mark is-xs', 'aria-hidden': 'true' }, 'J'),
+        JAY.ui.avatar('Jay', { id: 'jay', size: 'sm', decorative: true }),
         h('div', { class: 'jay-typing' }, h('i'), h('i'), h('i')));
       thread.appendChild(t);
       scroll.scrollTop = scroll.scrollHeight;
@@ -362,13 +421,14 @@
     const offCtx = JAY.on('context', () => { updateHeader(); composerContext.querySelector('.jay-chip-label').textContent = shared.context; });
     const offOpen = JAY.on('chat:open', (id) => load(id));
     const offPrime = JAY.on('chat:prime', (intent) => prime(intent));
+    const offSessions = o.mode === 'focus' ? JAY.on('data:sessions', () => renderSide()) : () => {};
 
     return {
-      el,
+      el: root,
       focus() { textarea.focus({ preventScroll: true }); },
       prime,
       load,
-      destroy() { saveDraft(); stopMic(false); offCtx(); offOpen(); offPrime(); },
+      destroy() { saveDraft(); stopMic(false); offCtx(); offOpen(); offPrime(); offSessions(); if (resizeObs) resizeObs.disconnect(); sideSeq += 1; },
     };
   }
 

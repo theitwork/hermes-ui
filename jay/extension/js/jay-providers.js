@@ -11,7 +11,7 @@
   const JAY = window.JAY;
   if (!JAY || !JAY.mock) return;
 
-  const DEMO_KEY = 'demo-v1';
+  const DEMO_KEY = 'demo-v2';
   const DOMAINS = ['today', 'attention', 'tasks', 'projects', 'sessions', 'chat', 'system', 'people', 'notes', 'files', 'integrations'];
   const LEVEL_RANK = { critical: 0, overdue: 1, respond: 2, waiting: 3, info: 4 };
   const PRIORITY_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
@@ -45,8 +45,17 @@
     return Object.assign({}, t, {
       project: p ? { id: p.id, title: p.title, tone: p.tone } : null,
       assigneeName: person ? person.name : '',
+      watcherPeople: (t.watchers || [t.assignee]).map(personById).filter(Boolean).map((w) => ({ id: w.id, name: w.name })),
       dueState: t.status === 'done' ? 'done' : JAY.fmt.dueState(t.due),
     });
+  }
+
+  const STATUS_PROGRESS = { inbox: 0, next: 8, in_progress: 40, waiting: 60, done: 100 };
+  function progressOf(t) {
+    const list = t.checklist || [];
+    if (t.status === 'done') return 100;
+    if (list.length) return Math.round((list.filter((c) => c.done).length / list.length) * 100);
+    return STATUS_PROGRESS[t.status] || 0;
   }
 
   function countTasks(tasks) {
@@ -72,6 +81,7 @@
       if (f.status && f.status !== 'all' && f.status !== 'open' && t.status !== f.status) return false;
       if (f.status === 'open' && t.status === 'done') return false;
       if (f.projectId && f.projectId !== 'all' && t.projectId !== f.projectId) return false;
+      if (f.owner && f.owner !== 'all' && t.assignee !== f.owner) return false;
       if (f.due && f.due !== 'any') {
         const st = JAY.fmt.dueState(t.due, now);
         if (f.due === 'overdue' && !(st === 'overdue' && t.status !== 'done')) return false;
@@ -194,7 +204,13 @@
         projectId: input.projectId || 'personal', status: input.status || 'inbox', priority: input.priority || 'medium',
         due: input.due || null, assignee: input.assignee || 'pat', tags: input.tags || [], description: input.description || '',
         createdAt: now, updatedAt: now, source: input.source || 'manual',
+        checklist: Array.isArray(input.checklist) ? input.checklist.map((c) => ({ text: String(c.text || ''), done: !!c.done })) : [],
+        activity: Array.from({ length: 14 }, (_, i) => (i === 13 ? 1 : 0)),
+        comments: 0, attachments: 0,
+        lastEvent: { at: now, label: 'Created' },
+        watchers: [input.assignee || 'pat'],
       };
+      t.progress = progressOf(t);
       d.tasks.unshift(t);
       persist();
       changed('tasks', 'today', 'projects');
@@ -203,7 +219,11 @@
     async updateTask(id, patch) {
       const t = taskById(id);
       if (!t) throw new Error('Task not found');
-      Object.assign(t, patch, { updatedAt: new Date().toISOString() });
+      const nowIso = new Date().toISOString();
+      const statusChanged = patch.status && patch.status !== t.status;
+      Object.assign(t, patch, { updatedAt: nowIso });
+      if (patch.checklist || statusChanged) t.progress = progressOf(t);
+      t.lastEvent = { at: nowIso, label: statusChanged ? 'Status' : (patch.checklist ? 'Checklist' : 'Edited') };
       persist();
       changed('tasks', 'today', 'projects', 'attention');
       return decorateTask(t);
@@ -220,6 +240,8 @@
         delete t.prevStatus;
       }
       t.updatedAt = new Date().toISOString();
+      t.progress = progressOf(t);
+      t.lastEvent = { at: t.updatedAt, label: 'Status' };
       load().attention.forEach((a) => { if (a.taskId === id) a.resolved = markDone; });
       persist();
       changed('tasks', 'today', 'projects', 'attention');
@@ -257,6 +279,16 @@
       persist();
       changed('today');
       return clone(item);
+    },
+    async updateProject(id, patch) {
+      const p = projectById(id);
+      if (!p) throw new Error('Project not found');
+      const allowed = ['favorite', 'muted', 'status', 'title', 'description'];
+      allowed.forEach((k) => { if (Object.prototype.hasOwnProperty.call(patch || {}, k)) p[k] = patch[k]; });
+      p.updatedAt = new Date().toISOString();
+      persist();
+      changed('projects');
+      return clone(p);
     },
     async createProject(input) {
       const d = load();
@@ -334,7 +366,7 @@
     getTodayItems: 'today', getTodaySummary: 'today', getAgendaItem: 'today', addReminder: 'today',
     getAttentionItems: 'attention', resolveAttention: 'attention', restoreAttention: 'attention',
     getTasks: 'tasks', getTask: 'tasks', getTaskCounts: 'tasks', createTask: 'tasks', updateTask: 'tasks', completeTask: 'tasks', deleteTask: 'tasks',
-    getProjects: 'projects', getProject: 'projects', createProject: 'projects',
+    getProjects: 'projects', getProject: 'projects', createProject: 'projects', updateProject: 'projects',
     getRecentSessions: 'sessions',
     getConversation: 'chat', appendMessage: 'chat', newConversation: 'chat',
     getSystemStatus: 'system', getAutomations: 'system',

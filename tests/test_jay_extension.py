@@ -142,7 +142,22 @@ def test_css_has_no_imports_or_remote_urls():
         src = path.read_text(encoding="utf-8")
         assert "@import" not in src, path.name
         for match in re.findall(r"url\(([^)]*)\)", src):
-            assert match.strip("\"'").startswith("data:image/svg+xml"), (path.name, match)
+            ref = match.strip("\"'")
+            if ref.startswith("../fonts/"):
+                # self-hosted font files only, and they must ship with the bundle
+                assert re.fullmatch(r"\.\./fonts/[a-z0-9-]+\.woff2", ref), (path.name, ref)
+                assert (CSS_DIR / ref).resolve().is_file(), (path.name, ref)
+                continue
+            assert ref.startswith("data:image/svg+xml"), (path.name, match)
+
+
+def test_self_hosted_fonts_ship_with_their_licenses():
+    fonts = EXT_DIR / "fonts"
+    assert sorted(p.name for p in fonts.glob("*.woff2"))
+    assert (fonts / "LICENSE-Inter.txt").is_file()
+    assert (fonts / "LICENSE-Poppins.txt").is_file()
+    for lic in fonts.glob("LICENSE-*.txt"):
+        assert "SIL Open Font License" in lic.read_text(encoding="utf-8")
 
 
 def test_only_the_provider_layer_talks_to_hermes_and_only_reads():
@@ -213,7 +228,7 @@ for (const f of ['jay-core.js', 'jay-data-mock.js', 'jay-providers.js', 'jay-cha
   D.clearSimulations();
   const r1 = await window.JAY.chat.respond('Remind me to call the bank in 30 minutes', null);
   out.reminderReply = r1.text;
-  out.reminderAdded = JSON.parse(store['jay:demo-v1']).data.agenda.some((a) => a.kind === 'reminder' && a.title === 'Call the bank');
+  out.reminderAdded = JSON.parse(store['jay:demo-v2']).data.agenda.some((a) => a.kind === 'reminder' && a.title === 'Call the bank');
   const r2 = await window.JAY.chat.respond('Add a task to renew the car registration', null);
   out.taskReply = r2.text;
   const r3 = await window.JAY.chat.respond('Something unrelated', null);
@@ -281,7 +296,7 @@ def test_mock_responder_is_local_and_honest(data_layer):
 
 
 def test_only_demo_state_is_persisted(data_layer):
-    assert data_layer["persisted"] == ["jay:adapters", "jay:demo-v1"]
+    assert data_layer["persisted"] == ["jay:adapters", "jay:demo-v2"]
 
 
 # ── Preview launcher safety ───────────────────────────────────────────────

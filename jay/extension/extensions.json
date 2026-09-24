@@ -10,7 +10,8 @@
         "css/jay-shell.css",
         "css/jay-components.css",
         "css/jay-home.css",
-        "css/jay-views.css"
+        "css/jay-tasks.css",
+        "css/jay-pages.css"
       ],
       "scripts": [
         "js/jay-core.js",
