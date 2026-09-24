@@ -706,6 +706,9 @@ The WebUI is still coupled to Hermes Agent internals for runtime execution, prov
 - [`SPRINTS.md`](SPRINTS.md) — forward sprint plan with CLI + Claude parity targets
 - [`CONTRIBUTORS.md`](CONTRIBUTORS.md) — the full community credit roll
 
+**JAY (fork development — not part of upstream Hermes WebUI)**
+- [`docs/JAY_PREVIEW.md`](docs/JAY_PREVIEW.md) — run the mock-backed JAY personal-OS preview (isolated, loopback-only); design and upstream notes in [`docs/JAY_ARCHITECTURE.md`](docs/JAY_ARCHITECTURE.md) and [`docs/JAY_CUSTOMIZATIONS.md`](docs/JAY_CUSTOMIZATIONS.md)
+
 ---
 
 ## Contributors
