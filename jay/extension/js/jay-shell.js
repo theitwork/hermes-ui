@@ -268,14 +268,14 @@
   /* ── Density ───────────────────────────────────────────────────────── */
   // Comfortable: floating panels. Dense: one flush window with hairline
   // dividers, smaller type and tighter rows (tablet and desktop; phones keep
-  // touch sizes). Stored per browser; a page may set a default with
-  // <html data-jay-density-default="dense">.
+  // touch sizes). Dense is the default; the choice is stored per browser, and
+  // a page may set another default with <html data-jay-density-default="comfortable">.
   const DENSITIES = ['comfortable', 'dense'];
   function density() {
     const v = JAY.storage.get('density', null);
     if (DENSITIES.includes(v)) return v;
     const d = document.documentElement.getAttribute('data-jay-density-default');
-    return DENSITIES.includes(d) ? d : 'comfortable';
+    return DENSITIES.includes(d) ? d : 'dense';
   }
   function applyDensity() { document.documentElement.dataset.jayDensity = density(); }
   function setDensity(v) {

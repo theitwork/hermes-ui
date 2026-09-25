@@ -76,7 +76,7 @@ the same `-L 8789:127.0.0.1:8789` forward from an SSH client on the phone (e.g. 
 | Projects | Tree (Favorites / Active / Finished / Archive), a project's stream crumbs (filters board, list and feed), tabs, List / Board, Add Task / Add Subtask, Activity feed with Approve / Decline, star / mute |
 | Navigation | Chat / Files / Automations open real Hermes; the J rail (or the titlebar **JAY** button on phones) returns |
 | Theme | Sun/moon in the topbar or rail; persists and is shared with Hermes |
-| Density | Account menu → *Dense layout* (or System → Appearance → Density): the flush Sales-CRM layout with hairline dividers; switch back with *Comfortable layout* |
+| Density | Dense (flush Sales-CRM layout, hairline dividers) is the default. Account menu → *Comfortable layout* (or System → Appearance → Density) switches to floating panels; the choice is remembered per browser |
 | Search | Press `/` anywhere on a JAY page |
 | Phone | Resize below 768px: bottom nav (Home · Tasks · Jay · More), full-screen Jay, bottom sheets |
 

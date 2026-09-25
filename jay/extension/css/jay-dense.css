@@ -3,7 +3,8 @@
    edge to edge and the 1px gaps between them read as hairline dividers
    (containers paint --jay-line behind their children); type, controls and
    rows step down one size. Tablet and desktop only: phones keep touch sizes.
-   Comfortable (the default) is untouched; this file only adds overrides. */
+   Dense is the default density; Comfortable is untouched by this file, which
+   only adds overrides. */
 
 @media (min-width: 768px) {
   :root[data-jay-density="dense"] {

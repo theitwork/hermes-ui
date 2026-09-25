@@ -87,6 +87,8 @@ def test_dense_density_is_an_isolated_override_layer():
             assert '[data-jay-density="dense"]' in part, part.strip()
     shell = (JS_DIR / "jay-shell.js").read_text(encoding="utf-8")
     assert "setDensity" in shell and "data-jay-density-default" in shell
+    # Dense is the default when nothing is stored and the page sets no default.
+    assert re.search(r"DENSITIES\.includes\(d\) \? d : 'dense'", shell)
 
 
 def test_manifest_urls_pass_core_url_validation():

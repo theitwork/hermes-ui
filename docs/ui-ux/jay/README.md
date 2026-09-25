@@ -5,6 +5,9 @@ Captured headless (Chromium, 1x) from `scripts/jay-preview.sh` with mock data, a
 self-hosted Inter / Poppins that ships in `jay/extension/fonts/`, so these match real devices.
 PNGs are quantized to 256 colours to keep the repository small.
 
+Dense is the default density. The `dense-*` shots show it; the other JAY shots show the
+Comfortable density (floating panels), available from the account menu.
+
 | File | What |
 |---|---|
 | `before-hermes-1440-dark.png`, `before-hermes-390-dark.png` | Stock Hermes WebUI before JAY (baseline) |

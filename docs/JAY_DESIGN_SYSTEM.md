@@ -335,12 +335,12 @@ refine a component per screen; those refinements are listed with the screen in �
 
 ## 4a. Density (css/jay-dense.css)
 
-Two densities share one component set. **Comfortable** (default) is the floating-panel layout
-described above. **Dense** follows the Sales CRM reference: one flush window instead of floating
-panels.
+Two densities share one component set. **Dense** (default) follows the Sales CRM reference: one flush window instead of floating
+panels. **Comfortable** is the floating-panel layout described in §2–4.
 
 - **Switch:** `JAY.shell.setDensity('comfortable' | 'dense')` / `JAY.shell.density()`. Stored per
-  browser as `jay:density`. A page can set the default with `<html data-jay-density-default="dense">`.
+  browser as `jay:density`. With nothing stored, Dense applies; a page can change that default with
+  `<html data-jay-density-default="comfortable">`.
   Two entry points, kept in sync: the account menu (*Dense layout* / *Comfortable layout*) and
   System → Appearance → Density.
 - **Mechanism:** the shell sets `html[data-jay-density]`. `jay-dense.css` loads last and holds only
