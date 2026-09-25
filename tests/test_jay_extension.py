@@ -58,6 +58,37 @@ def test_manifest_lists_existing_assets_in_load_order():
     assert shipped == listed
 
 
+def test_dense_density_is_an_isolated_override_layer():
+    """Dense loads last and every rule is scoped to data-jay-density="dense",
+    so the default (Comfortable) rendering cannot change through it."""
+    entry = _manifest_entry()
+    assert entry["stylesheets"][-1] == "css/jay-dense.css"
+    css = re.sub(r"/\*.*?\*/", "", (CSS_DIR / "jay-dense.css").read_text(encoding="utf-8"), flags=re.S)
+    selectors = []
+    depth = 0
+    buf = ""
+    for ch in css:
+        if ch == "{":
+            head = buf.strip()
+            if not head.startswith("@"):
+                selectors.append(head)
+            depth += 1
+            buf = ""
+        elif ch == "}":
+            depth -= 1
+            buf = ""
+        elif ch == ";":
+            buf = ""
+        else:
+            buf += ch
+    assert selectors, "no rules parsed"
+    for sel in selectors:
+        for part in re.split(r",(?![^()]*\))", sel):
+            assert '[data-jay-density="dense"]' in part, part.strip()
+    shell = (JS_DIR / "jay-shell.js").read_text(encoding="utf-8")
+    assert "setDensity" in shell and "data-jay-density-default" in shell
+
+
 def test_manifest_urls_pass_core_url_validation():
     from api import extensions
 

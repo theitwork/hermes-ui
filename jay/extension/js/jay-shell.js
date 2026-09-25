@@ -264,6 +264,26 @@
     syncThemeButtons();
   }
   function toggleTheme() { setTheme(isDark() ? 'light' : 'dark'); }
+
+  /* ── Density ───────────────────────────────────────────────────────── */
+  // Comfortable: floating panels. Dense: one flush window with hairline
+  // dividers, smaller type and tighter rows (tablet and desktop; phones keep
+  // touch sizes). Stored per browser; a page may set a default with
+  // <html data-jay-density-default="dense">.
+  const DENSITIES = ['comfortable', 'dense'];
+  function density() {
+    const v = JAY.storage.get('density', null);
+    if (DENSITIES.includes(v)) return v;
+    const d = document.documentElement.getAttribute('data-jay-density-default');
+    return DENSITIES.includes(d) ? d : 'comfortable';
+  }
+  function applyDensity() { document.documentElement.dataset.jayDensity = density(); }
+  function setDensity(v) {
+    if (!DENSITIES.includes(v)) return;
+    JAY.storage.set('density', v);
+    applyDensity();
+    JAY.emit('density', v);
+  }
   // Every theme control on the page stays in step, whichever one was used:
   // toggles ([data-jay-theme-toggle]), pressed buttons and radio options
   // ([data-jay-theme-choice]); radios follow the stored preference so
@@ -423,6 +443,9 @@
     const ctx = context();
     const m = JAY.ui.menu(anchor, [
       { label: isDark() ? 'Light mode' : 'Dark mode', icon: isDark() ? 'sun' : 'moon', run: toggleTheme },
+      density() === 'dense'
+        ? { label: 'Comfortable layout', icon: 'board', run: () => setDensity('comfortable') }
+        : { label: 'Dense layout', icon: 'table', run: () => setDensity('dense') },
       { label: 'Hermes settings', icon: 'sliders', run: () => openHermes('settings') },
       { label: 'System', icon: 'system', run: () => go('system') },
       '-',
@@ -1131,6 +1154,7 @@
     if (els.app) els.app.remove();
     document.documentElement.classList.remove('jay-enabled');
     delete document.documentElement.dataset.jayMode;
+    delete document.documentElement.dataset.jayDensity;
     delete document.documentElement.dataset.jayRoute;
     document.querySelectorAll('.app-titlebar, .layout').forEach((el) => { el.inert = false; });
   }
@@ -1138,6 +1162,7 @@
   function start() {
     if (document.getElementById('jayApp')) return;
     document.documentElement.classList.add('jay-enabled');
+    applyDensity();
     hermesTitle = document.title;
     state.mode = 'jay';
     build();
@@ -1156,7 +1181,7 @@
   }
 
   JAY.shell = {
-    start, stop, setTheme, toggleTheme, themePreference, isDark, openHermes, openSearch, openMore, setHeader,
+    start, stop, setTheme, toggleTheme, themePreference, isDark, density, setDensity, openHermes, openSearch, openMore, setHeader,
     navigate, replaceParams, focusAttention: goAttention, state,
   };
 })();

@@ -28,7 +28,8 @@ Browser
      │   ├── jay-components.css panels, layout grid, tree, tabs, buttons, pills, tags, meters, feed, overlays
      │   ├── jay-home.css       Home grid, Today, Attention, bento, Talk to Jay, phone composition
      │   ├── jay-tasks.css      Tasks table, toolbar, calc bar, kanban board, task drawer
-     │   └── jay-pages.css      Projects, placeholders, Integrations, System
+     │   ├── jay-pages.css      Projects, placeholders, Integrations, System
+     │   └── jay-dense.css      Dense density overrides (html[data-jay-density="dense"], ≥ 768px)
      └── fonts/                 self-hosted Inter + Poppins (woff2, latin, 400–700) and their OFL licences
 ```
 

@@ -23,3 +23,6 @@ PNGs are quantized to 256 colours to keep the repository small.
 | `hermes-chat-1440-dark.png` | Hermes mode: JAY rail + stock Hermes chat with the JAY skin |
 | `system-1440-dark.png`, `calendar-1440-light.png` | System page; Calendar placeholder |
 | `states-1440-dark.png` | Simulated widget states: not connected, caught up, error, empty, disconnected |
+| `dense-tasks-1440-dark.png`, `dense-tasks-1440-light.png` | Dense density: Tasks table as one flush window (Sales CRM reference) |
+| `dense-tasks-board-1440-light.png`, `dense-project-1440-dark.png` | Dense density: kanban board; project detail |
+| `dense-home-1440-dark.png`, `dense-system-1440-light.png` | Dense density: Home dashboard; System with the Density switch |

@@ -1,0 +1,139 @@
+/* JAY customization — Dense density (html[data-jay-density="dense"]).
+   The Sales CRM look: one flush window instead of floating panels. Panels sit
+   edge to edge and the 1px gaps between them read as hairline dividers
+   (containers paint --jay-line behind their children); type, controls and
+   rows step down one size. Tablet and desktop only: phones keep touch sizes.
+   Comfortable (the default) is untouched; this file only adds overrides. */
+
+@media (min-width: 768px) {
+  :root[data-jay-density="dense"] {
+    --jay-gap: 1px;             /* hairline dividers between flush panels */
+    --jay-pad: 14px;
+    --jay-rail-w: 56px;
+    --jay-side-w: 236px;
+    --jay-aside-w: 320px;
+    --jay-topbar-h: 56px;
+    --jay-line: #E4E4E0;
+  }
+  :root.dark[data-jay-density="dense"] {
+    /* One deep surface, as in the reference; raised controls stay one step up. */
+    --jay-canvas: #161616;
+    --jay-bg: #161616;
+    --jay-surface: #1A1A1A;
+    --jay-surface-2: #222222;
+    --jay-surface-3: #2A2A2A;
+    --jay-inset: #1F1F1F;
+    --jay-line: #2A2A2A;
+  }
+
+  /* ── Window: rail | header / view, all flush ── */
+  /* Each panel draws a 1px outline into the 1px gap around it, so neighbours
+     share one hairline and a short column leaves plain surface, not a grey
+     block. Containers paint surface. */
+  :root[data-jay-density="dense"] .jay-app { padding: 0; background: var(--jay-surface); font-size: 13px; }
+  :root[data-jay-density="dense"] .jay-view-scroll { border-radius: 0; background: var(--jay-surface); }
+  /* Window panels only: drawers, sheets and menus keep their floating shape. */
+  :root[data-jay-density="dense"] :is(.jay-rail.jay-box, .jay-main .jay-box) {
+    border: 0;
+    border-radius: 0;
+    box-shadow: 0 0 0 1px var(--jay-line);
+  }
+
+  /* ── Rail: flush icon column ── */
+  :root[data-jay-density="dense"] .jay-rail.jay-box { padding: 10px 0; gap: 2px; }
+  :root[data-jay-density="dense"] .jay-mark.is-rail { width: 36px; height: 36px; border-radius: 10px; font-size: 16px; }
+  :root[data-jay-density="dense"] .jay-rail-logo { margin-bottom: 10px; }
+  :root[data-jay-density="dense"] .jay-nav-btn { width: 38px; height: 38px; border-radius: 9px; }
+  :root[data-jay-density="dense"] .jay-rail .jay-nav-btn svg { width: 18px; height: 18px; stroke-width: 1.9; }
+  :root[data-jay-density="dense"] .jay-rail .jay-nav-btn.is-active { background: var(--jay-hover); }
+  :root[data-jay-density="dense"] .jay-rail .jay-nav-btn.is-active::before { left: -9px; top: 8px; bottom: 8px; }
+  :root[data-jay-density="dense"] :is(.jay-bell-dot, .jay-rail .jay-nav-badge.is-dot) { top: 8px; right: 9px; box-shadow: 0 0 0 2px var(--jay-surface); }
+  :root[data-jay-density="dense"] .jay-rail-profile { width: 38px; height: 38px; }
+  :root[data-jay-density="dense"] .jay-rail-sep { width: 24px; margin: 6px 0; }
+
+  /* ── Header: one compact line ── */
+  :root[data-jay-density="dense"] .jay-header.jay-box { gap: 12px; padding: 0 12px 0 20px; }
+  :root[data-jay-density="dense"] .jay-header-main { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; }
+  :root[data-jay-density="dense"] .jay-header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
+  :root[data-jay-density="dense"] .jay-header-crumbs { font-size: 12px; }
+  :root[data-jay-density="dense"] .jay-header-search { height: 32px; font-size: 12.5px; border-radius: var(--jay-r-md); }
+  :root[data-jay-density="dense"] .jay-header .jay-circle-btn { width: 32px; height: 32px; }
+  :root[data-jay-density="dense"] .jay-header-me { height: 32px; }
+
+  /* ── Panels: tighter heads and bodies ── */
+  :root[data-jay-density="dense"] .jay-box-head { min-height: 46px; padding: 10px var(--jay-pad) 8px 16px; }
+  :root[data-jay-density="dense"] .jay-box-title { font-size: 14px; font-weight: 600; }
+  :root[data-jay-density="dense"] .jay-box-title.is-lg { font-size: 17px; }
+  :root[data-jay-density="dense"] .jay-box-sub { font-size: 12px; }
+
+  /* ── Side tree (Tasks, Projects, Talk): the CRM's flat sidebar ── */
+  :root[data-jay-density="dense"] .jay-side { padding: 10px 8px; }
+  :root[data-jay-density="dense"] .jay-side-search > .jay-input { height: 32px; border-radius: var(--jay-r-md); font-size: 12.5px; }
+  :root[data-jay-density="dense"] .jay-side-head {
+    min-height: 28px;
+    margin-top: 6px;
+    font-family: var(--jay-font);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--jay-muted);
+  }
+  :root[data-jay-density="dense"] .jay-side-item { min-height: 30px; font-size: 13px; border-radius: var(--jay-r-sm); }
+  :root[data-jay-density="dense"] .jay-side-foot { min-height: 36px; font-size: 13px; }
+
+  /* ── Controls ── */
+  :root[data-jay-density="dense"] .jay-btn { height: 32px; padding: 0 12px; font-size: 12.5px; border-radius: var(--jay-r-md); }
+  :root[data-jay-density="dense"] .jay-btn.is-sm { height: 28px; }
+  :root[data-jay-density="dense"] .jay-icon-btn { width: 32px; height: 32px; }
+  :root[data-jay-density="dense"] .jay-fpill { height: 30px; font-size: 12px; }
+  :root[data-jay-density="dense"] .jay-tabs:not(.is-boxed) .jay-tab { font-size: 12.5px; }
+  :root[data-jay-density="dense"] .jay-tag { height: 20px; font-size: 11.5px; }
+
+  /* ── Tasks: CRM table at reference density ── */
+  :root[data-jay-density="dense"] .jay-ttabs { padding: 0 16px; }
+  :root[data-jay-density="dense"] .jay-ttabs .jay-tab { height: 42px; }
+  :root[data-jay-density="dense"] .jay-ttoolbar { padding: 10px 16px; gap: 8px; }
+  :root[data-jay-density="dense"] .jay-tpills > .jay-fpill,
+  :root[data-jay-density="dense"] .jay-ttoolbar > .jay-btn,
+  :root[data-jay-density="dense"] .jay-tsearch > .jay-input { height: 30px; font-size: 12px; }
+  :root[data-jay-density="dense"] .jay-bulkbar { min-height: 51px; padding: 10px 16px; }
+  :root[data-jay-density="dense"] .jay-ttable { font-size: 12.5px; }
+  :root[data-jay-density="dense"] .jay-ttable thead th { height: 32px; font-size: 11.5px; }
+  :root[data-jay-density="dense"] .jay-ttable :is(td, tbody th) { height: 34px; }
+  :root[data-jay-density="dense"] .jay-row-title { font-size: 12.5px; }
+  :root[data-jay-density="dense"] .jay-ttable .c-sel { padding-left: 16px; }
+  :root[data-jay-density="dense"] .jay-calcbar { min-height: 36px; font-size: 12px; }
+
+  /* ── Board (Tasks + Projects): smaller cards ── */
+  :root[data-jay-density="dense"] .jay-kcol { gap: 8px; }
+  :root[data-jay-density="dense"] .jay-kcard { padding: 10px 12px; gap: 8px; border-radius: var(--jay-r-md); }
+  :root[data-jay-density="dense"] .jay-kcard-title { font-size: 13px; }
+  :root[data-jay-density="dense"] .jay-kcol-add,
+  :root[data-jay-density="dense"] .jay-pj-board .jay-kcol-add { height: 34px; border-radius: var(--jay-r-md); }
+  /* Projects' Tasks tab: toolbar and board get an inner margin (they sat on the
+     canvas before); the list block reads as one bordered table. */
+  :root[data-jay-density="dense"] .jay-pj-scroll { gap: 10px; padding: 6px 14px 14px; }
+  /* Projects' board sat on the canvas; flush, its cards step up like Tasks'. */
+  :root[data-jay-density="dense"] .jay-pj-board :is(.jay-kcard, .jay-kcol-add) { --jay-av-ring: var(--jay-surface-2); background: var(--jay-surface-2); }
+  :root[data-jay-density="dense"] .jay-pj-board .jay-kcol-add:hover { background: var(--jay-surface-3); }
+
+  /* ── Home: a dashboard of flush tiles ── */
+  :root[data-jay-density="dense"] .jay-hp-head { min-height: 48px; }
+  :root[data-jay-density="dense"] .jay-hp-title { font-size: 14px; font-weight: 600; }
+
+  /* ── Hermes mode: the rail stays flush beside Hermes ── */
+  :root[data-jay-density="dense"][data-jay-mode="hermes"] body { background: var(--jay-line); }
+  :root[data-jay-density="dense"][data-jay-mode="hermes"] body > .app-titlebar,
+  :root[data-jay-density="dense"][data-jay-mode="hermes"] body > .layout { border-radius: 0; }
+  :root[data-jay-density="dense"][data-jay-mode="hermes"] .jay-app { background: var(--jay-line); }
+}
+
+/* Column overrides only where those layouts are in effect (the tree hides
+   below 1200 on Tasks; Home recomposes below 1280). */
+@media (min-width: 1200px) {
+  :root[data-jay-density="dense"] .jay-layout.jay-tasks.has-side { grid-template-columns: 228px minmax(0, 1fr); }
+}
+@media (min-width: 1280px) {
+  :root[data-jay-density="dense"] .jay-home.jay-layout.is-fill { grid-template-columns: 272px minmax(0, 1fr) minmax(0, 1fr) var(--jay-aside-w); }
+}

@@ -11,7 +11,8 @@
         "css/jay-components.css",
         "css/jay-home.css",
         "css/jay-tasks.css",
-        "css/jay-pages.css"
+        "css/jay-pages.css",
+        "css/jay-dense.css"
       ],
       "scripts": [
         "js/jay-core.js",

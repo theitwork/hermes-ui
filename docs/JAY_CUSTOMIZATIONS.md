@@ -22,6 +22,7 @@ Keep this file current whenever JAY touches anything outside `jay/`.
 | `jay/extension/css/jay-home.css` | Home grid, Today, Attention, bento row, Talk to Jay, phone composition |
 | `jay/extension/css/jay-tasks.css` | Tasks table, toolbar, calculation bar, kanban board (shared with Projects), task drawer |
 | `jay/extension/css/jay-pages.css` | Projects, placeholders (Calendar, Notes, People), Integrations, System |
+| `jay/extension/css/jay-dense.css` | Dense density: overrides scoped to `html[data-jay-density="dense"]` (≥ 768px), loaded last |
 | `jay/extension/fonts/*` | Self-hosted Inter and Poppins (8 woff2 files: latin subset, weights 400–700) with `LICENSE-Inter.txt` and `LICENSE-Poppins.txt` (SIL Open Font License 1.1) |
 | `jay/extension/js/jay-*.js` (10 files) | Runtime — see `docs/JAY_ARCHITECTURE.md` |
 | `jay/README.md`, `jay/preview.env.example` | Pointer + documented preview variables (no secrets) |
@@ -66,7 +67,8 @@ one, JAY shows a notice instead of crashing, and stock Hermes keeps working.
 - Browser-local keys (all prefixed `jay:`): `demo-v2` (mock data with `schema: 3`, rebuilt daily or when
   the schema changes; superseded `jay:demo-*` blobs are removed), `adapters`, `simulate`, `tasks-ui`
   (layout, sort, direction), `projects-ui` (tab, layout, filter, open tree sections, favorite and mute
-  overrides, read markers), `home:attention-read`, `context`, `skin-initialized`. No secrets.
+  overrides, read markers), `home:attention-read`, `context`, `skin-initialized`, `density`
+  (`comfortable` | `dense`). No secrets.
 - Fonts: Inter and Poppins load from the extension's own `fonts/` directory (same origin). JAY
   makes no third-party requests.
 

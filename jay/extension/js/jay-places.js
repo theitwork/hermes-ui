@@ -347,15 +347,24 @@
       const themeSeg = UI.segmented([['dark', 'Dark', 'moon'], ['light', 'Light', 'sun'], ['system', 'System', 'monitor']],
         JAY.shell ? JAY.shell.themePreference() : 'dark', (v) => JAY.shell.setTheme(v), 'Theme');
       themeSeg.querySelectorAll('button[data-value]').forEach((b) => { b.dataset.jayThemeChoice = b.dataset.value; });
-      const themeMo = new MutationObserver(() => { if (JAY.shell) themeSeg.setValue(JAY.shell.themePreference()); });
-      themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+      const themeMo = new MutationObserver(() => {
+        if (!JAY.shell) return;
+        themeSeg.setValue(JAY.shell.themePreference());
+        if (densitySeg) densitySeg.setValue(JAY.shell.density());
+      });
+      themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-jay-density'] });
+      const densitySeg = JAY.shell && typeof JAY.shell.density === 'function'
+        ? UI.segmented([['comfortable', 'Comfortable', 'board'], ['dense', 'Dense', 'table']], JAY.shell.density(), (v) => JAY.shell.setDensity(v), 'Density')
+        : null;
 
       const aside = h('div', { class: 'jay-stack jay-sys-aside' },
         UI.box({ class: 'jay-sys-card' },
           panelHead('Appearance', { icon: 'sun' }),
           h('div', { class: 'jay-box-body' },
             themeSeg,
-            h('p', { class: 'jay-sys-lede' }, 'Shared with Hermes. The “JAY” skin is also available in Hermes Settings → Appearance.'))),
+            h('p', { class: 'jay-sys-lede' }, 'Shared with Hermes. The “JAY” skin is also available in Hermes Settings → Appearance.'),
+            densitySeg ? h('div', { class: 'jay-field jay-sys-density' }, h('span', { class: 'jay-label' }, 'Density'), densitySeg,
+              h('p', { class: 'jay-sys-lede' }, 'Dense fits more rows on screen: one flush window, hairline dividers, smaller type. Phones keep touch sizes.')) : null)),
         UI.box({ class: 'jay-sys-card' },
           panelHead('Data sources', { icon: 'database', sub: 'Mock by default. The Hermes bridges only read and never send anything.' }),
           h('div', { class: 'jay-box-body jay-sys-sources' },

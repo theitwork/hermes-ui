@@ -333,6 +333,31 @@ refine a component per screen; those refinements are listed with the screen in �
   `dateCell` schedule ("▢ Daily | 07:30"), a 14-day runs sparkline (a failed run is one red bar) and
   an OK / Failed pill; data-source and theme `segmented` controls; preview tools.
 
+## 4a. Density (css/jay-dense.css)
+
+Two densities share one component set. **Comfortable** (default) is the floating-panel layout
+described above. **Dense** follows the Sales CRM reference: one flush window instead of floating
+panels.
+
+- **Switch:** `JAY.shell.setDensity('comfortable' | 'dense')` / `JAY.shell.density()`. Stored per
+  browser as `jay:density`. A page can set the default with `<html data-jay-density-default="dense">`.
+  Two entry points, kept in sync: the account menu (*Dense layout* / *Comfortable layout*) and
+  System → Appearance → Density.
+- **Mechanism:** the shell sets `html[data-jay-density]`. `jay-dense.css` loads last and holds only
+  rules scoped to `[data-jay-density="dense"]` inside `@media (min-width: 768px)`, so Comfortable and
+  phones are unchanged (a test enforces the scoping).
+- **Window:** `--jay-gap: 1px`, no outer padding. Window panels (rail and view panels, not overlays)
+  lose radius and shadow and draw a 1px `--jay-line` outline into the gap. Neighbours share one
+  hairline, and a short column leaves plain surface instead of a grey block.
+- **Tokens (dense):** `--jay-pad 14`, `--jay-rail-w 56`, `--jay-side-w 236`, `--jay-aside-w 320`,
+  `--jay-topbar-h 56`, `--jay-line` (#E4E4E0 light / #2A2A2A dark). Dark uses one deeper surface:
+  surface #1A1A1A, surface-2 #222, surface-3 #2A2A2A.
+- **Type and controls:** base 13px, header on one line (15/600 title), panel titles 14/600, tree
+  section heads 11px uppercase, tree rows 30px, buttons 32px, filter pills 30px.
+- **Tasks table:** 32px head, 34px rows, 12.5px cells; tree 228px at ≥ 1200. Boards: 34px Add Task
+  rows, 10/12 card padding; the Projects board cards step up to surface-2.
+- **Phones (< 768px):** unchanged in both densities (touch sizing).
+
 ## 5. Shared contracts between modules
 
 - `JAY.tasks`: `openTask(id, { focus })`, `openCreate(prefill)` (`{ projectId, status, stream,

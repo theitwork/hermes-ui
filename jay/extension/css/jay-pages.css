@@ -783,6 +783,8 @@ button.jay-pj-crumb.is-active:hover { color: var(--jay-accent-text); }
 .jay-sys-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--jay-border); font-size: 12px; color: var(--jay-muted); }
 .jay-sys-foot strong { color: var(--jay-text); font-weight: 500; font-variant-numeric: tabular-nums; }
 .jay-sys-lede { margin: 12px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--jay-text-2); }
+.jay-sys-density { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--jay-border); }
+.jay-sys-density > .jay-sys-lede { margin-top: 4px; }
 .jay-sys-sources { display: grid; gap: 14px; }
 .jay-sys .jay-segmented { max-width: 100%; overflow-x: auto; scrollbar-width: none; justify-self: start; }
 .jay-sys-events { display: grid; gap: 8px; padding: 0 10px 10px; }
