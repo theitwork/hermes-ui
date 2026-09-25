@@ -1,0 +1,195 @@
+/* JAY customization — design tokens (v2: "floating panels + lime").
+   Reference direction: near-black canvas with floating rounded panels and a
+   lime accent (Deepsleep board), dense neutral data surfaces with tinted tag
+   chips, segmented meters and sparklines (Sales CRM table).
+   JAY surfaces read only --jay-* tokens. Both modes follow Hermes' `.dark`
+   class, so one toggle drives Hermes and JAY together. */
+
+/* Self-hosted type (SIL OFL 1.1 — see ../fonts/LICENSE-*.txt). No third-party requests. */
+@font-face { font-family: "JAY Inter"; src: url("../fonts/inter-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Inter"; src: url("../fonts/inter-latin-500-normal.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Inter"; src: url("../fonts/inter-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Inter"; src: url("../fonts/inter-latin-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Poppins"; src: url("../fonts/poppins-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Poppins"; src: url("../fonts/poppins-latin-500-normal.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Poppins"; src: url("../fonts/poppins-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "JAY Poppins"; src: url("../fonts/poppins-latin-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+
+:root {
+  /* ── Light — neutral paper, white panels, olive-lime accent ── */
+  --jay-canvas: #E6E6E2;      /* page behind floating panels */
+  --jay-bg: #EDEDEA;          /* legacy alias: page ground */
+  --jay-surface: #FFFFFF;     /* floating panels (.jay-box) */
+  --jay-surface-2: #F5F5F2;   /* cards / raised rows inside panels */
+  --jay-surface-3: #EAEAE6;   /* hover fills, neutral chips, active nav pill */
+  --jay-inset: #F0F0EC;       /* search fields, inset buttons */
+  --jay-elevated: #FFFFFF;    /* drawers, menus, palette */
+  --jay-text: #161616;
+  --jay-text-2: #4D4D4D;
+  --jay-muted: #5F5F5F;       /* ≥ 5.1:1 on canvas, surface-2, surface-3 and inset */
+  --jay-faint: #A3A3A3;
+  --jay-border: rgba(0, 0, 0, 0.075);
+  --jay-border-strong: rgba(0, 0, 0, 0.14);
+  --jay-hover: rgba(0, 0, 0, 0.04);
+  --jay-press: rgba(0, 0, 0, 0.07);
+
+  --jay-accent: #A7E05F;          /* lime fill (buttons, logo, active bar, badges) */
+  --jay-accent-strong: #97D24C;   /* lime fill hover */
+  --jay-accent-text: #3E6A0C;     /* lime-family text on light surfaces (6.4:1 on white, ≥ 5.1:1 on canvas) */
+  --jay-accent-soft: rgba(122, 184, 42, 0.16);
+  --jay-accent-softer: rgba(122, 184, 42, 0.09);
+  --jay-on-accent: #10190A;       /* text on lime fill */
+
+  --jay-danger: #B8301F;          /* 4.8:1 on canvas, 5.5:1 on surface-2; white on it 6.0:1 */
+  --jay-danger-soft: rgba(184, 48, 31, 0.10);
+  --jay-warning: #805800;         /* 5.1:1 on canvas, 5.8:1 on surface-2 */
+  --jay-warning-soft: rgba(214, 160, 20, 0.14);
+  --jay-info: #2F6FB2;
+  --jay-info-soft: rgba(47, 111, 178, 0.10);
+  --jay-good: #1E9E5A;            /* meters, sparklines, "online" */
+  --jay-neutral-soft: rgba(0, 0, 0, 0.055);
+
+  /* Tag / chart hues — text-safe on light surfaces */
+  --jay-hue-blue: #2563EB;
+  --jay-hue-purple: #7C3AED;
+  --jay-hue-green: #15803D;
+  --jay-hue-lime: #3E6A0C;
+  --jay-hue-orange: #C2410C;
+  --jay-hue-red: #DC2626;
+  --jay-hue-yellow: #A16207;
+  --jay-hue-cyan: #0E7490;
+  --jay-hue-pink: #BE185D;
+  --jay-hue-neutral: #5C5C5C;
+
+  /* Segmented meter ramp (low → high) */
+  --jay-meter-1: #E5484D;
+  --jay-meter-2: #F08C3A;
+  --jay-meter-3: #E8C33A;
+  --jay-meter-4: #3DBE6E;
+  --jay-meter-off: rgba(0, 0, 0, 0.10);
+
+  /* Project tones map onto the hue palette */
+  --jay-tone-1: #7CB82A;
+  --jay-tone-2: #3B82F6;
+  --jay-tone-3: #EA7A2C;
+  --jay-tone-4: #D4A514;
+  --jay-tone-5: #8B5CF6;
+
+  --jay-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --jay-shadow-md: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 20px rgba(0, 0, 0, 0.05);
+  --jay-shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --jay-scrim: rgba(10, 10, 10, 0.32);
+  --jay-focus: 0 0 0 2px var(--jay-surface), 0 0 0 4px rgba(122, 184, 42, 0.6);
+
+  /* Shape, rhythm, type */
+  --jay-r-xs: 6px;
+  --jay-r-sm: 8px;
+  --jay-r-md: 10px;
+  --jay-r-lg: 14px;
+  --jay-r-xl: 18px;
+  --jay-r-pill: 999px;
+  --jay-gap: 12px;            /* gap between floating panels */
+  --jay-pad: 16px;            /* panel inner padding */
+  --jay-rail-w: 72px;
+  --jay-side-w: 264px;        /* contextual side panel (tree nav) */
+  --jay-aside-w: 336px;       /* right feed panel */
+  --jay-topbar-h: 64px;
+  --jay-bottomnav-h: 64px;
+  --jay-font: "JAY Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --jay-font-display: "JAY Poppins", "JAY Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --jay-font-mono: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  --jay-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --jay-dur: 160ms;
+}
+
+:root.dark {
+  /* ── Dark — soft charcoal canvas, lighter charcoal floating panels, lime.
+     Sampled from the Deepsleep reference: canvas and inset wells #1C1C1C,
+     panels #2A2A2A. Muted text stays ≥ 4.5:1 up to surface-3. ── */
+  --jay-canvas: #1C1C1C;
+  --jay-bg: #1C1C1C;
+  --jay-surface: #2A2A2A;
+  --jay-surface-2: #323232;
+  --jay-surface-3: #383838;
+  --jay-inset: #1F1F1F;
+  --jay-elevated: #2E2E2E;    /* drawers, menus: a hair lighter than panels */
+  --jay-text: #F4F4F4;
+  --jay-text-2: #BDBDBD;
+  --jay-muted: #A3A3A3;       /* 5.7:1 on surface, 5.1:1 on surface-2, 4.6:1 on surface-3 */
+  --jay-faint: #6E6E6E;
+  --jay-border: rgba(255, 255, 255, 0.065);
+  --jay-border-strong: rgba(255, 255, 255, 0.12);
+  --jay-hover: rgba(255, 255, 255, 0.045);
+  --jay-press: rgba(255, 255, 255, 0.08);
+
+  --jay-accent: #A7E05F;
+  --jay-accent-strong: #B9EC7B;
+  --jay-accent-text: #B4E878;
+  --jay-accent-soft: rgba(167, 224, 95, 0.14);
+  --jay-accent-softer: rgba(167, 224, 95, 0.07);
+  --jay-on-accent: #10190A;
+
+  --jay-danger: #FF7B6E;          /* ≥ 5:1 on surface-2 */
+  --jay-danger-soft: rgba(255, 123, 110, 0.13);
+  --jay-warning: #F5C542;
+  --jay-warning-soft: rgba(245, 197, 66, 0.13);
+  --jay-info: #5FB0DF;
+  --jay-info-soft: rgba(95, 176, 223, 0.13);
+  --jay-good: #3CCB7F;
+  --jay-neutral-soft: rgba(255, 255, 255, 0.07);
+
+  --jay-hue-blue: #7AAEFF;
+  --jay-hue-purple: #B09CFF;
+  --jay-hue-green: #5FD99A;
+  --jay-hue-lime: #B4E878;
+  --jay-hue-orange: #F6A55E;
+  --jay-hue-red: #FF8A7F;
+  --jay-hue-yellow: #F5CE5A;
+  --jay-hue-cyan: #5ED0EC;
+  --jay-hue-pink: #F58AC4;
+  --jay-hue-neutral: #BDBDBD;
+
+  --jay-meter-1: #E5484D;
+  --jay-meter-2: #F08C3A;
+  --jay-meter-3: #E8C33A;
+  --jay-meter-4: #3CCB7F;
+  --jay-meter-off: rgba(255, 255, 255, 0.10);
+
+  --jay-tone-1: #A7E05F;
+  --jay-tone-2: #5FB0DF;
+  --jay-tone-3: #F09A55;
+  --jay-tone-4: #F5C542;
+  --jay-tone-5: #A48BFF;
+
+  --jay-shadow-sm: none;
+  --jay-shadow-md: none;
+  --jay-shadow-lg: 0 28px 72px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --jay-scrim: rgba(0, 0, 0, 0.6);
+  --jay-focus: 0 0 0 2px var(--jay-surface), 0 0 0 4px rgba(167, 224, 95, 0.65);
+}
+
+/* ── "jay" skin: brings Hermes' own chrome (Chat, Files, Automations, Settings)
+   onto the JAY palette. Registered with registerHermesSkin() so it appears in
+   Settings → Appearance; these per-mode blocks refine it (higher specificity
+   than the single-mode block core injects for registered skins). ── */
+:root:not(.dark)[data-skin="jay"] {
+  --bg: #F3F3F0; --sidebar: #ECECE8; --surface: #FFFFFF; --border: #DCDCD7;
+  --border2: rgba(0, 0, 0, 0.14); --text: #161616; --muted: #666666;
+  --accent: #4A7A12; --accent-hover: #3E6A0C; --accent-bg: rgba(122, 184, 42, 0.10);
+  --accent-bg-strong: rgba(122, 184, 42, 0.18); --accent-text: #3E6A0C;
+  --code-bg: #EFEFEB; --topbar-bg: rgba(236, 236, 232, 0.98); --main-bg: rgba(243, 243, 240, 0.6);
+  --focus-ring: rgba(122, 184, 42, 0.4); --focus-glow: rgba(122, 184, 42, 0.12);
+  --hover-bg: rgba(0, 0, 0, 0.05); --input-bg: rgba(0, 0, 0, 0.03);
+  --success: #1E9E5A; --warning: #805800; --error: #B8301F; --info: #2F6FB2;
+}
+:root.dark[data-skin="jay"] {
+  --bg: #1C1C1C; --sidebar: #242424; --surface: #2A2A2A; --border: #383838;
+  --border2: rgba(255, 255, 255, 0.12); --text: #F4F4F4; --muted: #A3A3A3;
+  --accent: #A7E05F; --accent-hover: #B9EC7B; --accent-bg: rgba(167, 224, 95, 0.10);
+  --accent-bg-strong: rgba(167, 224, 95, 0.18); --accent-text: #B4E878;
+  --code-bg: #242424; --topbar-bg: rgba(36, 36, 36, 0.98); --main-bg: rgba(28, 28, 28, 0.6);
+  --focus-ring: rgba(167, 224, 95, 0.4); --focus-glow: rgba(167, 224, 95, 0.1);
+  --hover-bg: rgba(255, 255, 255, 0.055); --input-bg: rgba(255, 255, 255, 0.035);
+  --success: #3CCB7F; --warning: #F5C542; --error: #FF7B6E; --info: #5FB0DF;
+  --strong: #FFFFFF; --em: #BDBDBD;
+}

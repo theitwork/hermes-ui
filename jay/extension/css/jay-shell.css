@@ -1,0 +1,808 @@
+/* JAY customization — application shell (v2: floating panels + lime).
+   Canvas → floating icon rail + header panel + transparent view area (desktop);
+   compact app bar + bottom nav (phones); Hermes mode; search palette; More sheet.
+   Owns outer spacing: views lay out their own panels inside #jayView. */
+
+/* ── Base (zero-specificity resets so component classes always win) ── */
+.jay-app {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: var(--jay-rail-w) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--jay-gap);
+  padding: var(--jay-gap);
+  background: var(--jay-canvas);
+  color: var(--jay-text);
+  font-family: var(--jay-font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  color-scheme: light;
+}
+:root.dark .jay-app { color-scheme: dark; }
+/* Hermes styles form controls by element (0,0,1) and resolves --font-ui /
+   --font-conversation to its system stack; inside JAY both mean JAY Inter. */
+.jay-app { --font-ui: var(--jay-font); --font-conversation: var(--jay-font); }
+:where(.jay-app) :is(button, input, select, textarea) { font-family: inherit; }
+:where(.jay-app) :where(button) {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+:where(.jay-app) :where(button:disabled) { cursor: not-allowed; }
+:where(.jay-app) :where(ul, ol) { list-style: none; }
+:where(.jay-app) :where(h1, h2, h3) { font-weight: 600; }
+:where(.jay-app) :focus { outline: none; }
+:where(.jay-app) :focus-visible { outline: 2px solid var(--jay-accent); outline-offset: 2px; border-radius: 8px; }
+:where(.jay-app) * { scrollbar-width: thin; scrollbar-color: var(--jay-border-strong) transparent; }
+:where(.jay-app) ::-webkit-scrollbar { width: 10px; height: 10px; }
+:where(.jay-app) ::-webkit-scrollbar-thumb { background: var(--jay-border-strong); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+:where(.jay-app) ::-webkit-scrollbar-track { background: transparent; }
+:where(.jay-app) ::selection { background: var(--jay-accent-soft); }
+
+/* ── Skip link: first stop in the tab order, visible only while focused ── */
+.jay-skip {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 60;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 2px solid var(--jay-accent);
+  background: var(--jay-elevated);
+  color: var(--jay-text);
+  font: 600 13px/1.2 var(--jay-font);
+  box-shadow: var(--jay-shadow-lg);
+  transform: translateY(calc(-100% - 20px));
+  opacity: 0;
+  pointer-events: none;
+}
+.jay-skip:focus, .jay-skip:focus-visible { transform: none; opacity: 1; pointer-events: auto; outline: none; }
+:root:not(.dark) .jay-skip { border-color: var(--jay-accent-text); }
+html[data-jay-mode="hermes"] .jay-skip { display: none; }
+
+/* ── Jay monogram: lime rounded-square "J" everywhere ── */
+.jay-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--jay-accent);
+  color: var(--jay-on-accent);
+  font-family: var(--jay-font-display);
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  flex-shrink: 0;
+  user-select: none;
+}
+.jay-mark.is-sm { width: 28px; height: 28px; border-radius: 8px; font-size: 14px; }
+.jay-mark.is-xs { width: 22px; height: 22px; border-radius: 6px; font-size: 11.5px; }
+.jay-mark.is-rail { width: 52px; height: 52px; border-radius: 14px; font-size: 21px; }
+
+/* Shared text helpers used across views */
+.jay-warn-text { color: var(--jay-warning); }
+
+/* ── Rail (floating panel) ── */
+.jay-rail.jay-box {
+  grid-row: 1 / -1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 0;
+  padding: 14px 0;
+  overflow: visible;
+}
+.jay-rail-logo { display: grid; place-items: center; margin-bottom: 14px; border-radius: 12px; flex-shrink: 0; }
+.jay-rail-logo:hover .jay-mark { background: var(--jay-accent-strong); }
+.jay-rail-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.jay-rail-sep { width: 28px; height: 1px; background: var(--jay-border-strong); margin: 8px 0; flex-shrink: 0; }
+.jay-rail-spacer { flex: 1; min-height: 8px; }
+.jay-rail-profile { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; flex-shrink: 0; margin-top: 2px; }
+.jay-rail-profile .jay-av { transition: box-shadow var(--jay-dur) var(--jay-ease); }
+.jay-rail-profile:hover .jay-av { box-shadow: 0 0 0 2px var(--jay-border-strong); }
+
+.jay-nav-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: var(--jay-muted);
+  flex-shrink: 0;
+  transition: background var(--jay-dur) var(--jay-ease), color var(--jay-dur) var(--jay-ease);
+}
+.jay-nav-btn:hover { background: var(--jay-hover); color: var(--jay-text); }
+.jay-nav-btn:active { background: var(--jay-press); }
+.jay-nav-btn.is-active { color: var(--jay-accent-text); }
+.jay-nav-btn.is-active:hover { background: var(--jay-accent-softer); }
+/* Deepsleep's rail glyphs read solid; 2px strokes get closer than 1.75. */
+.jay-rail .jay-nav-btn svg { stroke-width: 2; }
+/* Deepsleep-style active bar on the rail's left edge (button is inset 14px). */
+.jay-rail .jay-nav-btn.is-active::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--jay-accent);
+}
+/* Light: pale lime is ~1.5:1 on white, so the bar uses the text-safe lime and
+   the active button gets a soft fill (the state must not rest on hue alone). */
+:root:not(.dark) .jay-rail .jay-nav-btn.is-active { background: var(--jay-accent-soft); }
+:root:not(.dark) .jay-rail .jay-nav-btn.is-active::before { background: var(--jay-accent-text); }
+.jay-nav-badge {
+  position: absolute;
+  top: 4px;
+  right: 3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 5px;
+  background: var(--jay-danger);
+  color: var(--jay-surface);
+  font: 600 10px/16px var(--jay-font);
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--jay-surface);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.jay-nav-badge.is-accent { background: var(--jay-accent); color: var(--jay-on-accent); }
+.jay-nav-badge.is-danger { background: var(--jay-danger); color: var(--jay-on-accent); }
+:root:not(.dark) .jay-nav-badge.is-danger { color: var(--jay-surface); }
+.jay-nav-badge[hidden] { display: none; }
+/* Desktop rail: counts render as the bell's dot (the number is in the
+   button's name and tooltip); the phone bottom nav keeps numbers. */
+.jay-bell-dot,
+.jay-rail .jay-nav-badge.is-dot {
+  position: absolute;
+  top: 11px;
+  right: 12px;
+  width: 8px;
+  min-width: 0;
+  height: 8px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--jay-accent);
+  box-shadow: 0 0 0 2px var(--jay-surface);
+  pointer-events: none;
+}
+.jay-rail .jay-nav-badge.is-dot.is-danger { background: var(--jay-danger); }
+:root:not(.dark) .jay-bell-dot,
+:root:not(.dark) .jay-rail .jay-nav-badge.is-dot.is-accent { background: var(--jay-accent-text); }
+.jay-bell-dot[hidden] { display: none; }
+
+/* Tooltips (fine pointers only; every icon button keeps its aria-label). The
+   bubble is generated only while hovered/focused so it never adds overflow. */
+@media (hover: hover) and (pointer: fine) {
+  .jay-app [data-tip] { position: relative; }
+  .jay-app [data-tip]:hover::after,
+  .jay-app [data-tip]:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    padding: 5px 9px;
+    border-radius: 8px;
+    background: var(--jay-text);
+    color: var(--jay-surface);
+    font: 500 12px/1.35 var(--jay-font);
+    letter-spacing: 0;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 40;
+    animation: jay-tip-y 140ms var(--jay-ease) 300ms both;
+  }
+  .jay-rail [data-tip]:hover::after,
+  .jay-rail [data-tip]:focus-visible::after {
+    top: 50%;
+    right: auto;
+    left: calc(100% + 14px);
+    animation-name: jay-tip-x;
+  }
+  /* Never cover an open menu or drawer with the anchor's own tooltip. */
+  .jay-app:has(.jay-overlays .jay-menu, .jay-overlays .jay-panel-wrap) [data-tip]::after { content: none; }
+}
+@keyframes jay-tip-y { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes jay-tip-x { from { opacity: 0; transform: translate(-3px, -50%); } to { opacity: 1; transform: translate(0, -50%); } }
+
+/* ── Main column: header panel over a transparent, scrolling view area ── */
+.jay-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--jay-gap);
+  min-width: 0;
+  min-height: 0;
+}
+.jay-view-scroll {
+  position: relative;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--jay-r-xl);
+}
+/* #jayView is a transparent container; views lay out their own panels
+   (.jay-layout.is-fill sizes it to the viewport — see jay-components.css). */
+.jay-view { min-height: 100%; outline: none; }
+
+/* ── Header panel (.jay-header.jay-box, 64px) ── */
+.jay-header.jay-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: var(--jay-topbar-h);
+  min-width: 0;
+  padding: 0 12px 0 18px; /* title shares the panel heads' 18px left edge */
+  overflow: visible;
+}
+.jay-appbar-brand, .jay-appbar-back { display: none; }
+.jay-header-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.jay-header-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.jay-header-title {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--jay-font-display);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--jay-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Takes focus after in-app navigation (a landmark for keyboard and screen
+   reader users), not an interactive control, so no ring. */
+.jay-header-title:focus, .jay-header-title:focus-visible { outline: none; }
+.jay-header-pill { display: inline-flex; flex-shrink: 0; }
+.jay-header-pill[hidden], .jay-header-crumbs[hidden] { display: none; }
+.jay-header-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--jay-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.jay-crumb { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.jay-crumb:last-child { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.jay-crumb > span { overflow: hidden; text-overflow: ellipsis; }
+.jay-crumb.is-link { color: var(--jay-muted); border-radius: 6px; }
+.jay-crumb.is-link:hover { color: var(--jay-text); }
+.jay-crumb.is-text { color: var(--jay-text-2); }
+.jay-crumb.is-accent { color: var(--jay-accent-text); }
+.jay-crumb.is-warning { color: var(--jay-warning); }
+.jay-crumb.is-danger { color: var(--jay-danger); }
+.jay-crumb.is-good { color: var(--jay-good); }
+.jay-crumb.is-info { color: var(--jay-info); }
+.jay-crumb-sep { color: var(--jay-faint); flex-shrink: 0; }
+
+.jay-header-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.jay-header-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 264px;
+  height: 38px;
+  padding: 0 7px 0 14px;
+  margin-right: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--jay-border);
+  background: var(--jay-inset);
+  color: var(--jay-muted);
+  font-size: 13px;
+  transition: border-color var(--jay-dur) var(--jay-ease), color var(--jay-dur) var(--jay-ease);
+}
+.jay-header-search:hover { border-color: var(--jay-border-strong); color: var(--jay-text-2); }
+.jay-header-search-text { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-header-search kbd,
+.jay-pal kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 6px;
+  border: 1px solid var(--jay-border-strong);
+  background: var(--jay-surface);
+  color: var(--jay-muted);
+  font: 500 11px/1 var(--jay-font-mono);
+}
+.jay-header-tools .jay-header-search-btn { display: none; }
+.jay-header-me {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 10px 0 6px;
+  margin-left: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--jay-border-strong);
+  transition: background var(--jay-dur) var(--jay-ease);
+}
+.jay-header-me:hover { background: var(--jay-surface-2); }
+.jay-header-me-name { font-family: var(--jay-font-display); font-size: 13px; font-weight: 500; color: var(--jay-text); }
+.jay-header-me-chev { color: var(--jay-muted); }
+
+/* A region the shell sent focus to (e.g. bell → Home's Attention panel). */
+.jay-region-flash { outline: 2px solid var(--jay-accent); outline-offset: 2px; }
+
+/* ── Overlays host ── */
+.jay-overlays { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+.jay-overlays > * { pointer-events: auto; }
+
+/* ── Bottom nav (phones only) ── */
+.jay-bottomnav { display: none; }
+
+/* ── Search palette (JAY preview data) ── */
+.jay-pal { display: flex; flex-direction: column; min-height: 0; }
+.jay-pal-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 50px;
+  padding: 0 12px 0 16px;
+  border-radius: var(--jay-r-lg);
+  background: var(--jay-inset);
+  border: 1px solid var(--jay-border);
+  color: var(--jay-muted);
+  cursor: text;
+}
+.jay-pal-field:focus-within { border-color: color-mix(in srgb, var(--jay-accent) 55%, transparent); }
+.jay-pal-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--jay-text);
+  font: 400 15px/1.2 var(--jay-font);
+}
+.jay-pal-input::placeholder { color: var(--jay-muted); }
+.jay-pal-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.jay-pal-results { margin-top: 10px; max-height: min(52vh, 440px); overflow: auto; overscroll-behavior: contain; }
+.jay-pal-group + .jay-pal-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--jay-border); }
+.jay-pal-label {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--jay-muted);
+}
+.jay-pal-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: var(--jay-r-md);
+  text-align: left;
+  color: var(--jay-muted);
+}
+.jay-pal-item:hover, .jay-pal-item:focus-visible, .jay-pal-item.is-active { background: var(--jay-surface-3); color: var(--jay-text-2); outline: none; }
+.jay-pal-item:focus-visible, .jay-pal-item.is-active { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--jay-accent) 55%, transparent); }
+:root:not(.dark) .jay-pal-item.is-active { box-shadow: inset 0 0 0 1px var(--jay-accent-text); }
+.jay-pal-ic {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--jay-r-sm);
+  background: var(--jay-surface-3);
+  color: var(--jay-text-2);
+}
+.jay-pal-item:hover .jay-pal-ic, .jay-pal-item:focus-visible .jay-pal-ic, .jay-pal-item.is-active .jay-pal-ic { background: var(--jay-accent-soft); color: var(--jay-accent-text); }
+.jay-pal-item > .jay-av { justify-self: center; }
+.jay-pal-title { font-size: 13.5px; font-weight: 500; color: var(--jay-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-pal-meta { font-size: 12px; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.jay-pal-item:not(:has(.jay-pal-meta)) .jay-pal-title { grid-column: 2 / 4; }
+.jay-pal-go { display: grid; place-items: center; color: var(--jay-muted); opacity: 0; transition: opacity var(--jay-dur) var(--jay-ease); }
+.jay-pal-item:hover .jay-pal-go, .jay-pal-item:focus-visible .jay-pal-go, .jay-pal-item.is-active .jay-pal-go { opacity: 1; }
+.jay-pal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 10px 6px 0;
+  border-top: 1px solid var(--jay-border);
+  font-size: 11.5px;
+  color: var(--jay-muted);
+}
+.jay-pal-keys { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.jay-pal-keys kbd { min-width: 20px; height: 20px; font-size: 10.5px; }
+.jay-pal-keys kbd + kbd { margin-left: 0; }
+.jay-pal-keys kbd:nth-of-type(3) { margin-left: 8px; }
+.jay-pal-note { text-align: right; }
+
+/* ── More sheet ── */
+.jay-sheet { display: flex; flex-direction: column; gap: 12px; }
+.jay-sheet-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.jay-sheet-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 96px;
+  padding: 12px 6px;
+  border-radius: var(--jay-r-lg);
+  background: var(--jay-surface-2);
+  text-align: center;
+  transition: background var(--jay-dur) var(--jay-ease);
+}
+/* Hover only where hover exists: a tap must not leave a sticky highlight. */
+@media (hover: hover) { .jay-sheet-item:hover { background: var(--jay-surface-3); } }
+.jay-sheet-item:active { background: var(--jay-surface-3); }
+.jay-sheet-ic {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--jay-r-md);
+  background: var(--jay-surface-3);
+  color: var(--jay-text-2);
+}
+.jay-sheet-label { font-family: var(--jay-font-display); font-size: 13px; font-weight: 500; color: var(--jay-text); line-height: 1.2; }
+.jay-sheet-hint { font-size: 10.5px; color: var(--jay-muted); margin-top: -6px; }
+.jay-sheet-item.is-active { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--jay-accent) 50%, transparent); }
+.jay-sheet-item.is-active .jay-sheet-ic { background: var(--jay-accent); color: var(--jay-on-accent); }
+.jay-sheet-item.is-active .jay-sheet-label { color: var(--jay-accent-text); }
+.jay-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px 8px 16px;
+  border-radius: var(--jay-r-lg);
+  background: var(--jay-surface-2);
+  color: var(--jay-text);
+}
+.jay-sheet-row-label { flex: 1; font-family: var(--jay-font-display); font-size: 13.5px; font-weight: 500; }
+.jay-sheet-row.is-button { text-align: left; }
+@media (hover: hover) { .jay-sheet-row.is-button:hover { background: var(--jay-surface-3); } }
+.jay-sheet-row.is-button:active { background: var(--jay-surface-3); }
+.jay-sheet-row.is-button > .jay-icon { color: var(--jay-muted); }
+.jay-sheet-row-ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--jay-r-sm); background: var(--jay-surface-3); color: var(--jay-text-2); flex-shrink: 0; }
+/* Account group: who is signed in (plain text), then its two actions. */
+.jay-sheet-account { display: flex; flex-direction: column; gap: 2px; border-radius: var(--jay-r-lg); overflow: hidden; }
+.jay-sheet-account > .jay-sheet-row { border-radius: 0; }
+.jay-sheet-row.is-identity { padding-left: 12px; }
+/* Identity line (More sheet row, account menu header) */
+.jay-id-main { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.jay-id-name { font-family: var(--jay-font-display); font-size: 14px; font-weight: 500; color: var(--jay-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-id-meta { font-size: 12px; color: var(--jay-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-menu-head { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px 10px 4px; }
+.jay-menu-head .jay-id-name { font-size: 13.5px; }
+.jay-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--jay-r-md); background: var(--jay-inset); border: 1px solid var(--jay-border); }
+.jay-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--jay-r-sm);
+  font-family: var(--jay-font-display);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--jay-muted);
+}
+.jay-seg-btn[aria-pressed="true"] { background: var(--jay-surface-3); color: var(--jay-text); }
+.jay-seg-btn[aria-pressed="true"] .jay-icon { color: var(--jay-accent-text); }
+
+/* ── JAY mode: Hermes stays mounted (state, streams, timers intact) but is not
+   painted or focusable underneath JAY. ── */
+html[data-jay-mode="jay"] body > .app-titlebar,
+html[data-jay-mode="jay"] body > .layout { visibility: hidden; overflow: clip; }
+
+/* ── Hermes mode: JAY shrinks to its floating rail; Hermes floats beside it
+   as one rounded panel on the same canvas (titlebar + layout). ── */
+.jay-hermes-home { display: none; }
+@media (min-width: 768px) {
+  html[data-jay-mode="hermes"] body {
+    padding: var(--jay-gap) var(--jay-gap) var(--jay-gap) calc(var(--jay-rail-w) + 2 * var(--jay-gap));
+    background: var(--jay-canvas);
+  }
+  html[data-jay-mode="hermes"] body > .app-titlebar { border-radius: var(--jay-r-xl) var(--jay-r-xl) 0 0; }
+  html[data-jay-mode="hermes"] body > .layout {
+    border-radius: 0 0 var(--jay-r-xl) var(--jay-r-xl);
+    overflow: hidden;
+    background: var(--bg);
+  }
+  /* Hermes' fixed right-edge "show workspace" toggle stays inside the panel. */
+  html[data-jay-mode="hermes"] .workspace-panel-edge-toggle { right: calc(10px + var(--jay-gap)); }
+  html[data-jay-mode="hermes"] .jay-app {
+    right: auto;
+    width: calc(var(--jay-rail-w) + 2 * var(--jay-gap));
+    grid-template-columns: var(--jay-rail-w);
+    background: var(--jay-canvas);
+  }
+  html[data-jay-mode="hermes"] .jay-main { display: none; }
+}
+
+/* ── Short desktop windows: tighten the rail so it never scrolls ── */
+@media (min-width: 768px) and (max-height: 860px) {
+  .jay-rail.jay-box { padding: 12px 0; }
+  .jay-rail-logo { margin-bottom: 10px; }
+  .jay-rail .jay-nav-btn { width: 40px; height: 40px; }
+  .jay-rail .jay-nav-btn.is-active::before { left: -16px; }
+  .jay-rail-sep { margin: 6px 0; }
+  .jay-rail-profile { width: 40px; height: 40px; }
+  .jay-rail .jay-mark.is-rail { width: 44px; height: 44px; border-radius: 12px; font-size: 19px; }
+  .jay-bell-dot, .jay-rail .jay-nav-badge.is-dot { top: 9px; right: 10px; }
+}
+@media (min-width: 768px) and (max-height: 740px) and (pointer: fine) {
+  .jay-rail.jay-box { gap: 2px; }
+  .jay-rail .jay-mark.is-rail { width: 40px; height: 40px; font-size: 17px; }
+  .jay-rail .jay-nav-btn { width: 36px; height: 36px; border-radius: 10px; }
+  .jay-rail .jay-nav-btn.is-active::before { left: -18px; top: 7px; bottom: 7px; }
+  .jay-rail-sep { margin: 4px 0; }
+  .jay-rail-profile { width: 36px; height: 36px; }
+  .jay-rail .jay-rail-profile .jay-av { width: 30px; height: 30px; font-size: 11px; }
+  .jay-bell-dot, .jay-rail .jay-nav-badge.is-dot { top: 7px; right: 8px; }
+}
+@media (min-width: 768px) and (max-height: 680px) {
+  .jay-rail.jay-box { overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
+  .jay-rail.jay-box::-webkit-scrollbar { display: none; }
+}
+
+/* ── Medium desktop: search collapses to a circle ── */
+@media (max-width: 1180px) {
+  .jay-header-search { width: 208px; }
+}
+@media (max-width: 980px) {
+  .jay-header.jay-box { gap: 12px; }
+  .jay-header-tools .jay-header-search { display: none; }
+  .jay-header-tools .jay-header-search-btn { display: inline-grid; }
+  .jay-header-me-name, .jay-header-me-chev { display: none; }
+  .jay-header-tools .jay-header-me { width: 38px; padding: 0; justify-content: center; }
+}
+
+/* ── Touch: 40px+ targets ── */
+@media (pointer: coarse) {
+  .jay-header-tools .jay-circle-btn { width: 40px; height: 40px; }
+  .jay-header-search, .jay-header-me { height: 40px; }
+  .jay-seg-btn { height: 40px; }
+}
+@media (pointer: coarse) and (max-width: 980px) {
+  .jay-header-tools .jay-header-me { width: 40px; }
+}
+/* Touch tablets (no hover, coarse pointer) get no keyboard hints; a hybrid
+   with a trackpad or mouse keeps them. */
+@media (hover: none) and (pointer: coarse) {
+  .jay-pal .jay-pal-kbd, .jay-pal-keys, .jay-header-search kbd { display: none; }
+  .jay-pal-note { text-align: left; }
+}
+
+/* ── Phones: native app bar + bottom nav, no rail, no canvas padding ── */
+@media (max-width: 767.98px) {
+  .jay-app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 0;
+    padding: 0;
+  }
+  .jay-rail.jay-box { display: none; }
+  .jay-main { grid-row: 1; gap: 0; }
+  .jay-app .jay-header.jay-box {
+    height: auto;
+    min-height: calc(56px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) 12px 0 16px;
+    gap: 8px;
+    border-radius: 0;
+    background: var(--jay-canvas);
+    box-shadow: none;
+    border: 0;
+  }
+  .jay-appbar-brand { display: inline-flex; align-items: center; gap: 10px; min-width: 0; min-height: 44px; flex: 1 1 auto; border-radius: 10px; }
+  .jay-appbar-brand .jay-mark { width: 32px; height: 32px; border-radius: 9px; font-size: 16px; }
+  .jay-appbar-title {
+    min-width: 0;
+    font-family: var(--jay-font-display);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .jay-app[data-route="home"] .jay-appbar-title { letter-spacing: 0.08em; font-size: 16px; }
+  /* setHeader({ back }): a chevron before the brand; the chevron's glyph sits
+     on the app bar's 16px edge, so the lime tile moves right by its width. */
+  .jay-appbar-back:not([hidden]) {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 40px;
+    height: 44px;
+    margin: 0 -4px 0 -12px;
+    border-radius: 12px;
+    color: var(--jay-text);
+  }
+  .jay-appbar-back:active { background: var(--jay-hover); }
+  .jay-header-main { display: none; }
+  .jay-header-tools { gap: 6px; }
+  .jay-header-tools .jay-header-search,
+  .jay-header-tools .jay-header-create,
+  .jay-header-tools .jay-header-theme { display: none; }
+  .jay-header-tools .jay-header-search-btn { display: inline-grid; }
+  .jay-app .jay-header-tools .jay-circle-btn { width: 40px; height: 40px; background: var(--jay-surface); border-color: var(--jay-border); }
+  .jay-header-tools .jay-header-me { width: 40px; height: 40px; margin-left: 0; padding: 0; border: 0; justify-content: center; }
+  .jay-header .jay-header-me .jay-av { width: 34px; height: 34px; font-size: 12px; }
+  .jay-header-me-name, .jay-header-me-chev { display: none; }
+
+  .jay-view-scroll { border-radius: 0; }
+  .jay-view { padding: 4px 12px 16px; }
+  .jay-app[data-route="talk"] .jay-view { padding: 0; }
+
+  .jay-bottomnav {
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    align-items: stretch;
+    height: calc(var(--jay-bottomnav-h) + env(safe-area-inset-bottom, 0px));
+    padding: 0 6px env(safe-area-inset-bottom, 0px);
+    background: var(--jay-surface);
+    border-top: 1px solid var(--jay-border);
+  }
+  :root:not(.dark) .jay-bottomnav { border-top-color: var(--jay-border-strong); }
+  .jay-nav-btn.is-bottom {
+    width: auto;
+    height: auto;
+    border-radius: var(--jay-r-lg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin: 6px 2px;
+    color: var(--jay-muted);
+  }
+  .jay-nav-btn.is-bottom > .jay-icon { margin: 4px 0; } /* 30px icon box, same as the Jay tile, so labels align */
+  .jay-nav-btn.is-bottom:hover { background: transparent; color: var(--jay-muted); }
+  .jay-nav-btn.is-bottom:active { background: var(--jay-hover); }
+  .jay-nav-btn.is-bottom.is-active { background: transparent; color: var(--jay-accent-text); }
+  .jay-nav-btn.is-bottom .jay-nav-badge { top: 2px; right: calc(50% - 22px); box-shadow: 0 0 0 2px var(--jay-surface); }
+  .jay-nav-label { font-family: var(--jay-font-display); font-size: 11px; font-weight: 500; line-height: 1; letter-spacing: 0.01em; }
+  .jay-nav-btn.is-bottom.is-active .jay-nav-label { font-weight: 600; }
+  .jay-nav-jay {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 30px;
+    border-radius: 10px;
+    background: var(--jay-accent);
+    color: var(--jay-on-accent);
+    font-family: var(--jay-font-display);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .jay-nav-btn.is-jay .jay-nav-label { color: var(--jay-text-2); }
+  .jay-nav-btn.is-jay.is-active .jay-nav-label { color: var(--jay-accent-text); }
+
+  /* Immersive Jay conversation on phones */
+  .jay-app[data-route="talk"] .jay-header,
+  .jay-app[data-route="talk"] .jay-bottomnav { display: none; }
+
+  /* Palette as a bottom sheet: no keyboard hints */
+  .jay-pal .jay-pal-kbd, .jay-pal-keys { display: none; }
+  .jay-pal-note { text-align: left; }
+  .jay-pal-item { grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; row-gap: 1px; min-height: 52px; }
+  .jay-pal-item > :first-child { grid-row: 1 / span 2; }
+  .jay-pal-title, .jay-pal-meta { grid-column: 2; }
+  .jay-pal-item:not(:has(.jay-pal-meta)) .jay-pal-title { grid-column: 2; grid-row: 1 / span 2; }
+  .jay-pal-meta { max-width: none; font-size: 11.5px; }
+  .jay-pal-go { display: none; }
+  /* Full-height and top-anchored to the visual viewport, so the soft
+     keyboard never covers the results (a bottom sheet would sit under it). */
+  .jay-panel.is-sheet.is-palette {
+    top: 0;
+    bottom: auto;
+    height: var(--jay-vvh, 100dvh);
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: 0;
+  }
+  .jay-panel.is-palette .jay-sheet-grabber { display: none; }
+  .jay-panel.is-palette .jay-panel-body { display: flex; flex-direction: column; overflow: hidden; }
+  .jay-panel.is-palette .jay-pal { flex: 1; min-height: 0; }
+  .jay-panel.is-palette .jay-pal-results { flex: 1; min-height: 0; max-height: none; }
+
+  /* Hermes mode on phones: JAY steps aside entirely; a titlebar button returns. */
+  html[data-jay-mode="hermes"] .jay-app { inset: auto; width: 0; height: 0; padding: 0; overflow: visible; background: none; }
+  html[data-jay-mode="hermes"] .jay-rail,
+  html[data-jay-mode="hermes"] .jay-main,
+  html[data-jay-mode="hermes"] .jay-bottomnav { display: none; }
+  html[data-jay-mode="hermes"] .jay-hermes-home { display: inline-flex; }
+  html[data-jay-mode="hermes"] .jay-hermes-home.is-drawer { display: grid; }
+}
+@media (max-width: 339.98px) {
+  .jay-sheet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Button JAY injects into Hermes' titlebar (styled with Hermes tokens). */
+.jay-hermes-home {
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px 0 4px;
+  margin-right: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: 600 12.5px var(--font-ui);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.jay-hermes-home .jay-mark { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; }
+/* Same way home, placed at the top of Hermes' mobile drawer icon strip
+   (the drawer covers the titlebar button on phones). */
+.jay-hermes-home.is-drawer {
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0 0 4px;
+  border: 0;
+}
+.jay-hermes-home.is-drawer .jay-mark { width: 28px; height: 28px; border-radius: 8px; font-size: 14px; }
+@media (pointer: coarse) {
+  .jay-hermes-home:not(.is-drawer) { height: 40px; }
+}
+
+/* ── Forced colors (Windows High Contrast): fills and box-shadows vanish, so
+   state moves to outlines and system colours. ── */
+@media (forced-colors: active) {
+  .jay-rail .jay-nav-btn.is-active::before { background: Highlight; forced-color-adjust: none; }
+  .jay-nav-btn.is-active,
+  .jay-sheet-item.is-active,
+  .jay-seg-btn[aria-pressed="true"],
+  .jay-pal-item.is-active,
+  .jay-pal-item:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
+  .jay-bell-dot,
+  .jay-nav-badge { forced-color-adjust: none; background: Highlight; color: HighlightText; box-shadow: none; }
+  .jay-mark, .jay-nav-jay { border: 1px solid CanvasText; }
+  .jay-skip:focus { outline: 2px solid Highlight; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.jay-app) *, :where(.jay-app) *::before, :where(.jay-app) *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

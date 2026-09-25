@@ -1,0 +1,708 @@
+/* JAY customization — Home command center + Talk to Jay (v2: floating panels + lime).
+   Desktop: .jay-layout.is-fill grid of floating panels —
+     [Today 288] [Talk to Jay] [Attention var(--jay-aside-w)]
+     [Projects] [Tasks] [Continue] [Jay status]
+   Every colour comes from jay-tokens.css. Scoped to .jay-home / .jay-talk so
+   nothing here leaks into other screens. */
+
+/* ── Grid ── */
+.jay-home.jay-layout.is-fill {
+  grid-template-columns: 288px minmax(0, 1fr) minmax(0, 1fr) var(--jay-aside-w);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "today talk talk att"
+    "bento bento bento bento";
+  min-height: 600px;
+}
+.jay-home > .jay-today { grid-area: today; }
+.jay-home > .jay-talk { grid-area: talk; }
+.jay-home > .jay-attention { grid-area: att; }
+.jay-home > .jay-bento { grid-area: bento; }
+.jay-home > .jay-box { min-width: 0; }
+
+/* ── Home panel parts (.jay-hp) ── */
+.jay-hp { overflow: hidden; }
+.jay-hp-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 10px 12px 4px 18px;
+  flex-shrink: 0;
+}
+.jay-hp-titles { min-width: 0; }
+/* Every Home panel title: 16px Poppins 500 on a 22px line (design scale 16/20). */
+.jay-hp-title {
+  font-family: var(--jay-font-display);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 22px;
+  letter-spacing: -0.005em;
+  color: var(--jay-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.jay-hp-sub { margin-top: 1px; padding: 1px 0; font-size: 12.5px; line-height: 19px; color: var(--jay-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-hp-sub:empty { display: none; }
+.jay-hp-head > .jay-badge { margin-left: 2px; }
+/* Today's sub-line: the next title shortens, its time stays whole. */
+.jay-today-sub { display: flex; min-width: 0; }
+.jay-today-sub-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.jay-today-sub-at { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.jay-hp-tools { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+/* Top-row recipe (Today · Talk · Attention): 66px head, title on the first line
+   at the same y in all three, controls centred on the title line, no divider. */
+.jay-hp-head.is-top { align-items: flex-start; min-height: 66px; padding: 14px 12px 8px 18px; }
+.jay-hp-head.is-top > .jay-hp-tools { height: 22px; }
+.jay-hp-head.is-top .jay-hp-sub:empty { display: block; min-height: 19px; }
+.jay-hp-link { gap: 1px; padding: 4px 2px 4px 6px; margin-left: 2px; font-family: var(--jay-font-display); font-weight: 500; white-space: nowrap; }
+.jay-hp-link > .jay-icon { margin-right: -2px; }
+.jay-hp-body { flex: 1 1 auto; min-height: 0; padding: 0 8px 10px; }
+.jay-hp-foot { padding: 0 12px 12px; flex-shrink: 0; }
+.jay-hp-foot > .jay-btn { height: 34px; border-radius: var(--jay-r-md); font-size: 12.5px; }
+.jay-hp .jay-state.is-compact { padding: 10px; }
+.jay-hp .jay-skeleton { padding: 8px 10px; gap: 14px; }
+
+/* Rows inside panels (CRM sidebar density) */
+.jay-hp-rows { display: grid; gap: 2px; }
+.jay-hp-row {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 4px 10px;
+  border-radius: var(--jay-r-md);
+  text-align: left;
+  color: var(--jay-text);
+  transition: background var(--jay-dur) var(--jay-ease);
+}
+.jay-hp-row:hover { background: var(--jay-hover); }
+.jay-hp-row:focus-visible { outline-offset: -2px; }
+
+/* Projects: tone dot · title · segmented meter (or "N tasks") */
+.jay-proj-row { grid-template-columns: 8px minmax(0, 1fr) auto; gap: 9px; padding-right: 8px; }
+.jay-proj-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-proj-row .jay-meter { gap: 8px; }
+.jay-proj-row .jay-meter-val { font-size: 12px; min-width: 3.6ch; }
+.jay-proj-n { font-size: 12px; color: var(--jay-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Tasks: icon · label · count badge */
+.jay-count-row { grid-template-columns: 16px minmax(0, 1fr) auto; }
+.jay-count-ic { color: var(--jay-muted); }
+.jay-count-label { font-size: 13px; font-weight: 500; }
+.jay-count-row.is-danger .jay-count-ic { color: var(--jay-danger); }
+
+/* Continue: chat tile · title/meta · age */
+.jay-cont-row { grid-template-columns: 30px minmax(0, 1fr) auto; min-height: 44px; padding-top: 5px; padding-bottom: 5px; }
+.jay-cont-ic {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--jay-r-sm);
+  background: var(--jay-surface-3);
+  color: var(--jay-text-2);
+}
+.jay-cont-row:hover .jay-cont-ic { color: var(--jay-accent-text); }
+.jay-cont-main { display: grid; gap: 1px; min-width: 0; }
+.jay-cont-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-cont-meta { font-size: 11.5px; color: var(--jay-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-cont-time { align-self: start; margin-top: 3px; font-size: 11px; color: var(--jay-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Jay status: label · dot + value */
+.jay-status { padding: 0 2px; }
+.jay-status-list { display: grid; gap: 0; }
+.jay-status-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 29px; padding: 0 8px; font-size: 13px; }
+.jay-status-row + .jay-status-row { box-shadow: inset 0 1px 0 var(--jay-border); }
+.jay-status-label { color: var(--jay-text-2); }
+.jay-status-val { display: inline-flex; align-items: center; gap: 7px; font-weight: 500; color: var(--jay-text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.jay-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--jay-good); flex-shrink: 0; }
+.jay-status-val.is-warning .jay-status-dot { background: var(--jay-warning); }
+.jay-status-val.is-offline { color: var(--jay-muted); }
+.jay-status-val.is-offline .jay-status-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--jay-danger); }
+.jay-status-foot { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 8px 8px 0; font-size: 11.5px; color: var(--jay-muted); box-shadow: inset 0 1px 0 var(--jay-border); }
+
+/* ── Today panel ── */
+.jay-today-body { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 2px 8px 8px; }
+/* Scrolled: rows slide under a soft edge instead of a hard cut. */
+.jay-today-body.is-scrolled {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+}
+.jay-today-foot { flex-shrink: 0; padding: 8px 8px 10px; box-shadow: inset 0 1px 0 var(--jay-border); }
+.jay-today-foot:empty { display: none; }
+.jay-today-foot .jay-skeleton { padding: 4px 0; }
+
+.jay-tl-ic.is-blue { --tl: var(--jay-hue-blue); }
+.jay-tl-ic.is-lime { --tl: var(--jay-hue-lime); }
+.jay-tl-ic.is-yellow { --tl: var(--jay-hue-yellow); }
+.jay-tl-ic.is-purple { --tl: var(--jay-hue-purple); }
+.jay-tl-ic.is-orange { --tl: var(--jay-hue-orange); }
+
+.jay-timeline { position: relative; padding: 2px 0 4px; }
+/* Rail through the icon column: item pad 8 + time 40 + gap 10 + half icon 12 */
+.jay-timeline::before {
+  content: '';
+  position: absolute;
+  left: 69.5px;
+  top: 18px;
+  bottom: 18px;
+  width: 1px;
+  background: var(--jay-border-strong);
+}
+.jay-tl-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px 24px minmax(0, 1fr);
+  gap: 0 10px;
+  align-items: start;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: var(--jay-r-md);
+  text-align: left;
+  transition: background var(--jay-dur) var(--jay-ease);
+}
+.jay-tl-item:hover { background: var(--jay-hover); }
+.jay-tl-item:focus-visible { outline-offset: -2px; }
+.jay-tl-time { padding-top: 4px; font-size: 12px; font-weight: 500; color: var(--jay-text-2); font-variant-numeric: tabular-nums; }
+.jay-tl-ic {
+  --tl: var(--jay-hue-neutral);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  color: var(--tl);
+  background: color-mix(in srgb, var(--tl) 17%, var(--jay-surface));
+  box-shadow: 0 0 0 3px var(--jay-surface);
+}
+.jay-tl-main { display: grid; gap: 1px; min-width: 0; padding-top: 1px; }
+.jay-tl-title { font-size: 13px; font-weight: 500; line-height: 1.4; color: var(--jay-text); overflow-wrap: anywhere; }
+.jay-tl-meta { font-size: 11.5px; line-height: 1.4; color: var(--jay-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-tl-item.is-past .jay-tl-time,
+.jay-tl-item.is-past .jay-tl-title { color: var(--jay-text-2); }
+.jay-tl-item.is-past .jay-tl-time { color: var(--jay-muted); }
+.jay-tl-item.is-past .jay-tl-ic { background: color-mix(in srgb, var(--tl) 9%, var(--jay-surface)); }
+.jay-tl-item.is-past .jay-tl-ic > .jay-icon { opacity: 0.7; }
+.jay-tl-now {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 0 10px;
+  align-items: center;
+  padding: 3px 8px;
+}
+.jay-tl-now .jay-tl-time { padding: 0; font-size: 11.5px; font-weight: 600; color: var(--jay-accent-text); }
+.jay-tl-now-line { position: relative; height: 2px; margin-left: 12px; border-radius: 2px; background: var(--jay-accent); }
+:root:not(.dark) .jay-tl-now-line,
+:root:not(.dark) .jay-tl-now-line::before { background: var(--jay-accent-text); }
+.jay-tl-now-line::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--jay-accent);
+  box-shadow: 0 0 0 3px var(--jay-surface);
+}
+.jay-tl-done { padding: 8px 8px 4px 92px; font-size: 12px; line-height: 18px; color: var(--jay-muted); }
+/* Nothing after "now": the rail ends at the now-dot instead of running on
+   beside the note (timeline pad 4 + note 30 + half the 24px now row). */
+.jay-timeline:has(> .jay-tl-now + .jay-tl-done:last-child)::before { bottom: 46px; }
+.jay-tl-toggle { padding: 2px 8px 6px; }
+/* With earlier items folded away the rail starts under the toggle. */
+.jay-timeline:has(> .jay-tl-toggle)::before { top: 62px; }
+.jay-tl-earlier {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--jay-r-md);
+  background: var(--jay-inset);
+  color: var(--jay-text-2);
+  font-family: var(--jay-font-display);
+  font-size: 12px;
+  font-weight: 500;
+}
+.jay-tl-earlier:hover { color: var(--jay-text); }
+
+.jay-today-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.jay-sum {
+  display: grid;
+  justify-items: start;
+  gap: 0;
+  min-width: 0;
+  padding: 4px 10px;
+  border-radius: var(--jay-r-sm);
+  text-align: left;
+  color: var(--jay-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.jay-sum + .jay-sum { box-shadow: inset 1px 0 0 var(--jay-border); border-radius: 0 var(--jay-r-sm) var(--jay-r-sm) 0; }
+.jay-sum > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.jay-sum strong { font-family: var(--jay-font-display); font-size: 16px; font-weight: 500; line-height: 1.3; color: var(--jay-text); font-variant-numeric: tabular-nums; }
+button.jay-sum { transition: background var(--jay-dur) var(--jay-ease); }
+button.jay-sum:hover { background: var(--jay-hover); }
+button.jay-sum:hover > span { color: var(--jay-text-2); }
+
+/* ── Attention panel (Deepsleep feed) ── */
+.jay-hp-head.is-att { padding-right: 8px; }
+.jay-att-tabbar { flex-shrink: 0; margin: 0 12px 10px; padding: 0 14px; border-radius: var(--jay-r-lg); background: var(--jay-inset); }
+.jay-att-tabbar .jay-tabs { box-shadow: none; gap: 24px; }
+.jay-att-tabbar .jay-tab { height: 44px; }
+.jay-att-tabbar .jay-badge[hidden] { display: none; }
+/* The next card fades out at the bottom edge instead of being sliced; the
+   extra bottom padding lets the last card clear the fade at the end. */
+.jay-att-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 12px 28px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+.jay-att-body.is-scrolled {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 28px), transparent);
+}
+.jay-att-feed { display: grid; gap: 8px; }
+/* Severity shows in the red icon tile; the only edge bar is the lime unread one. */
+.jay-att-feed .jay-feed-actions { max-width: 260px; }
+/* Items about a muted project step back. */
+.jay-att-feed .jay-feed-item.is-muted > :not(.jay-feed-body),
+.jay-att-feed .jay-feed-item.is-muted .jay-feed-top,
+.jay-att-feed .jay-feed-item.is-muted .jay-feed-target { opacity: 0.62; }
+.jay-att-muted { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; color: var(--jay-muted); }
+.jay-att-wrap { display: grid; gap: 8px; }
+.jay-att-more { height: 40px; border-radius: var(--jay-r-lg); gap: 4px; }
+.jay-att-sheet .jay-att-feed { gap: 10px; }
+.jay-att-file { margin-top: 0; }
+
+/* ── Bento row: its four panels line up with the columns above
+   (Projects under Today, Tasks + Continue under Talk, Status under Attention). ── */
+.jay-bento {
+  display: grid;
+  grid-template-columns: 288px minmax(0, 1fr) minmax(0, 1fr) var(--jay-aside-w);
+  gap: var(--jay-gap);
+  min-width: 0;
+}
+@supports (grid-template-columns: subgrid) {
+  .jay-home.jay-layout.is-fill > .jay-bento { grid-template-columns: subgrid; }
+}
+.jay-bento-panel { min-width: 0; }
+
+/* ── Talk to Jay (dock + focus) ── */
+.jay-talk.jay-box { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.jay-talk-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 10px 14px 10px 18px;
+  flex-shrink: 0;
+}
+/* Desktop and tablet: the top-row head recipe shared with Today and Attention
+   (.jay-hp-head.is-top) — title at 14px, controls on the title line, no divider. */
+@media (min-width: 768px) {
+  .jay-talk-head { align-items: flex-start; min-height: 66px; padding: 14px 14px 8px 18px; }
+  .jay-talk-actions { height: 22px; }
+}
+.jay-talk-id { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.jay-talk-id > .jay-av { border-radius: 9px; font-size: 14px; }
+.jay-talk-titles { display: grid; gap: 1px; min-width: 0; }
+.jay-talk-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.jay-talk-name h2 { font-family: var(--jay-font-display); font-size: 16px; font-weight: 500; line-height: 22px; letter-spacing: -0.005em; }
+.jay-talk-pill { height: 22px; font-size: 11px; }
+.jay-talk-pill > i { background: var(--jay-accent); }
+.jay-talk-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 1px 4px 1px 0;
+  border-radius: var(--jay-r-xs);
+  font-size: 12.5px;
+  color: var(--jay-muted);
+}
+.jay-talk-context:hover { color: var(--jay-text); }
+.jay-talk-context .jay-sep { padding: 0; }
+.jay-talk-conv { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+.jay-talk-context > .jay-icon { flex-shrink: 0; margin-left: -3px; }
+.jay-talk-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.jay-talk-back { margin-left: -8px; }
+
+/* The thread slides under a soft top edge rather than being sliced by the
+   head. The fade (--jay-talk-fade) never exceeds the top padding, so the first
+   message is untouched when the thread is not scrolled. */
+.jay-talk-scroll {
+  --jay-talk-fade: 22px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 22px 24px 12px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--jay-talk-fade));
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--jay-talk-fade));
+}
+.jay-thread { display: flex; flex-direction: column; gap: 18px; max-width: 760px; margin: 0 auto; }
+.jay-msg.is-user { align-self: flex-end; display: flex; flex-direction: column; align-items: flex-end; max-width: min(78%, 540px); }
+.jay-bubble {
+  padding: 9px 14px;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--jay-surface-3);
+  color: var(--jay-text);
+  font-size: 13.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.jay-msg-meta { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; color: var(--jay-muted); font-variant-numeric: tabular-nums; }
+.jay-msg-who { font-family: var(--jay-font-display); font-weight: 500; color: var(--jay-text-2); }
+.jay-msg-local::before { content: '·'; margin-right: 6px; color: var(--jay-faint); }
+.jay-msg.is-jay { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; align-items: start; }
+.jay-msg.is-jay > .jay-av { border-radius: 7px; margin-top: 1px; }
+.jay-msg-body { min-width: 0; }
+.jay-msg-text { font-family: var(--font-conversation, var(--jay-font)); font-size: 14px; line-height: 1.65; color: var(--jay-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.jay-msg-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  margin-top: 8px;
+  padding: 0 12px;
+  border-radius: var(--jay-r-sm);
+  background: var(--jay-inset);
+  color: var(--jay-accent-text);
+  font-family: var(--jay-font-display);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.jay-msg-link:hover { background: var(--jay-surface-3); }
+.jay-day-sep { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--jay-muted); }
+.jay-day-sep::before, .jay-day-sep::after { content: ''; flex: 1; height: 1px; background: var(--jay-border); }
+.jay-typing { display: inline-flex; gap: 4px; padding: 9px 2px; }
+.jay-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--jay-muted); animation: jay-bounce 1.2s infinite ease-in-out; }
+.jay-typing i:nth-child(2) { animation-delay: 0.15s; }
+.jay-typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes jay-bounce { 0%, 60%, 100% { opacity: 0.35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+
+.jay-talk-empty { display: grid; justify-items: start; gap: 2px; max-width: 560px; padding: min(7vh, 52px) 0 8px; }
+.jay-talk-empty > .jay-av { margin-bottom: 16px; border-radius: 16px; font-size: 22px; }
+.jay-talk-greeting { font-family: var(--jay-font-display); font-size: 24px; font-weight: 500; line-height: 1.3; letter-spacing: -0.015em; }
+.jay-talk-prompt { font-family: var(--jay-font-display); font-size: 24px; font-weight: 400; line-height: 1.3; letter-spacing: -0.015em; color: var(--jay-muted); }
+.jay-talk-suggest { display: grid; gap: 6px; width: 100%; margin-top: 20px; }
+.jay-suggest {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 12px 0 14px;
+  border-radius: var(--jay-r-md);
+  background: var(--jay-surface-2);
+  font-size: 13.5px;
+  color: var(--jay-text-2);
+  text-align: left;
+  transition: background var(--jay-dur) var(--jay-ease), color var(--jay-dur) var(--jay-ease);
+}
+.jay-suggest:hover { background: var(--jay-surface-3); color: var(--jay-text); }
+.jay-suggest > .jay-icon { color: var(--jay-muted); flex-shrink: 0; }
+.jay-suggest:hover > .jay-icon { color: var(--jay-accent-text); }
+
+.jay-talk-foot { flex-shrink: 0; padding: 6px 16px 16px; }
+.jay-quick { display: flex; flex-wrap: wrap; gap: 6px; max-width: 760px; margin: 0 auto 10px; }
+.jay-talk .jay-quick-chip,
+.jay-m-quick .jay-quick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px 0 10px;
+  border-radius: var(--jay-r-pill);
+  border: 1px solid var(--jay-border-strong);
+  background: transparent;
+  color: var(--jay-text-2);
+  font-family: var(--jay-font-display);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background var(--jay-dur) var(--jay-ease), border-color var(--jay-dur) var(--jay-ease), color var(--jay-dur) var(--jay-ease);
+}
+.jay-talk .jay-quick-chip > .jay-icon,
+.jay-m-quick .jay-quick-chip > .jay-icon { color: var(--jay-muted); }
+.jay-talk .jay-quick-chip:hover,
+.jay-m-quick .jay-quick-chip:hover { background: var(--jay-hover); border-color: color-mix(in srgb, var(--jay-text) 30%, transparent); color: var(--jay-text); }
+.jay-talk .jay-quick-chip.is-active { background: var(--jay-accent); border-color: transparent; color: var(--jay-on-accent); }
+.jay-talk .jay-quick-chip.is-active > .jay-icon { color: currentColor; }
+
+.jay-composer {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 10px 10px 14px;
+  border-radius: var(--jay-r-lg);
+  border: 1px solid var(--jay-border);
+  background: var(--jay-inset);
+  transition: border-color var(--jay-dur) var(--jay-ease);
+}
+:root:not(.dark) .jay-composer { border-color: var(--jay-border-strong); }
+/* Typing focus: the same ring as every JAY field (accent-text edge + soft halo). */
+.jay-composer:has(> .jay-composer-input:focus) {
+  border-color: var(--jay-accent-text);
+  box-shadow: 0 0 0 1px var(--jay-accent-text), 0 0 0 4px var(--jay-accent-soft);
+}
+.jay-composer-input {
+  display: block;
+  width: 100%;
+  min-height: 24px;
+  max-height: 200px;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--jay-text);
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+}
+.jay-composer-input::placeholder { color: var(--jay-muted); opacity: 1; }
+.jay-composer-input:focus-visible { outline: none; }
+.jay-composer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.jay-composer-left { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; margin-left: -4px; }
+.jay-composer-left > .jay-icon-btn { color: var(--jay-text-2); }
+.jay-composer-left > .jay-icon-btn:hover { color: var(--jay-text); background: var(--jay-hover); }
+.jay-composer-left > .jay-icon-btn.is-active { color: var(--jay-accent-text); background: var(--jay-accent-soft); }
+.jay-composer-divider { width: 1px; height: 16px; margin: 0 4px; background: var(--jay-border-strong); flex-shrink: 0; }
+.jay-cchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  min-width: 0;
+  padding: 0 9px;
+  border-radius: var(--jay-r-sm);
+  border: 1px solid var(--jay-border);
+  background: var(--jay-surface-2);
+  color: var(--jay-text-2);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+:root:not(.dark) .jay-cchip:not(.is-static) { background: var(--jay-surface); }
+.jay-cchip .jay-chip-label { overflow: hidden; text-overflow: ellipsis; }
+.jay-cchip > .jay-icon { color: var(--jay-muted); flex-shrink: 0; }
+button.jay-cchip:hover { color: var(--jay-text); border-color: var(--jay-border-strong); }
+.jay-cchip.is-static { background: transparent; border-color: transparent; color: var(--jay-muted); padding: 0 6px; }
+.jay-send {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--jay-r-md);
+  background: var(--jay-accent);
+  color: var(--jay-on-accent);
+  flex-shrink: 0;
+  transition: background var(--jay-dur) var(--jay-ease), color var(--jay-dur) var(--jay-ease);
+}
+.jay-send:hover { background: var(--jay-accent-strong); }
+.jay-send:focus-visible { outline-color: var(--jay-accent-text); }
+/* Lime only when there is something to send; disabled is a quiet neutral tile. */
+.jay-send:disabled,
+.jay-send:disabled:hover { opacity: 1; background: var(--jay-surface-3); color: var(--jay-muted); }
+.jay-intent-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  margin: 0 0 8px -2px;
+  padding: 0 4px 0 9px;
+  border-radius: var(--jay-r-xs);
+  background: var(--jay-accent);
+  color: var(--jay-on-accent);
+  font-family: var(--jay-font-display);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.jay-intent-tag[hidden] { display: none; }
+.jay-intent-x { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; color: inherit; }
+.jay-intent-x:hover { background: color-mix(in srgb, var(--jay-on-accent) 14%, transparent); }
+.jay-attach-tray { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.jay-attach-tray[hidden] { display: none; }
+.jay-attach { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; height: 28px; padding: 0 4px 0 9px; border-radius: var(--jay-r-sm); background: var(--jay-surface-2); border: 1px solid var(--jay-border); font-size: 12px; }
+.jay-attach-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jay-attach-x { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; color: var(--jay-muted); }
+.jay-attach-x:hover { color: var(--jay-text); background: var(--jay-hover); }
+.jay-listen { display: flex; align-items: center; gap: 10px; padding: 0 0 8px; font-size: 12.5px; color: var(--jay-text-2); }
+.jay-listen[hidden] { display: none; }
+.jay-listen-wave { display: inline-flex; align-items: center; gap: 2px; height: 16px; }
+.jay-listen-wave i { width: 3px; height: 100%; border-radius: 2px; background: var(--jay-accent); animation: jay-wave 1s infinite ease-in-out; }
+.jay-listen-wave i:nth-child(2) { animation-delay: 0.1s; }
+.jay-listen-wave i:nth-child(3) { animation-delay: 0.2s; }
+.jay-listen-wave i:nth-child(4) { animation-delay: 0.3s; }
+.jay-listen-wave i:nth-child(5) { animation-delay: 0.4s; }
+@keyframes jay-wave { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+.jay-listen .jay-link { margin-left: auto; }
+
+/* Focused conversation page (#/talk): [conversation tree] [thread panel] */
+.jay-view:has(> .jay-talk-page) { height: 100%; }
+.jay-talk-page { display: flex; height: 100%; min-height: 0; }
+.jay-talk-page > .jay-talk.is-focus,
+.jay-talk-page > .jay-talk-layout { flex: 1 1 auto; width: 100%; min-width: 0; }
+.jay-talk-side .jay-side-item.is-active .jay-side-icon { color: var(--jay-accent-text); }
+.jay-talk.is-focus .jay-talk-scroll { padding-top: 28px; --jay-talk-fade: 22px; }
+.jay-talk.is-focus .jay-talk-foot { padding-bottom: 18px; }
+@media (min-width: 768px) {
+  /* The rail is on screen from 768px, so it is the way back: no Back button. */
+  .jay-talk-back { display: none; }
+  /* Head, thread, chips and composer share one centred 760px column. */
+  .jay-talk.is-focus .jay-talk-head {
+    padding-left: max(24px, calc((100% - 760px) / 2));
+    padding-right: max(24px, calc((100% - 760px) / 2));
+  }
+  /* The page header already says "Talk to Jay ● Preview": one Preview pill is enough. */
+  .jay-app:has(.jay-header-pill:not([hidden]) > .jay-dotpill) .jay-talk.is-focus .jay-talk-pill { display: none; }
+}
+
+/* Conversations sheet (Talk below 1024px, where the tree is hidden) */
+.jay-convs { display: grid; gap: 14px; }
+.jay-convs-ctx { display: grid; gap: 6px; }
+.jay-convs-label { font-size: 12px; font-weight: 500; color: var(--jay-text-2); }
+.jay-convs-search > .jay-input { height: 42px; padding-left: 38px; font-size: 13.5px; }
+.jay-convs .jay-side-list { --jay-side-in: 10px; }
+.jay-convs .jay-side-item { min-height: 44px; }
+.jay-convs .jay-side-section + .jay-side-section > .jay-side-title { margin: 6px 0 0; padding: 14px 10px 6px; }
+.jay-convs-time { flex-shrink: 0; font-family: var(--jay-font); font-size: 11.5px; color: var(--jay-muted); font-variant-numeric: tabular-nums; }
+
+/* ── Tablet / small desktop (1024–1279): Talk + Attention, then bento 2×2 + Today ── */
+@media (max-width: 1279.98px) {
+  .jay-view:has(> .jay-home.jay-layout.is-fill) { height: auto; }
+  .jay-home.jay-layout.is-fill {
+    height: auto;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(296px, 320px);
+    grid-template-rows: 600px auto;
+    grid-template-areas:
+      "talk att"
+      "bento today";
+  }
+  .jay-bento,
+  .jay-home.jay-layout.is-fill > .jay-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Today never grows the row: it takes the bento's height and scrolls inside. */
+  .jay-home.jay-layout.is-fill > .jay-today { height: 0; min-height: 100%; }
+}
+/* Tablet (768–1023): the page scrolls, not the panels. Attention shows its
+   top 3 + "See all" and Today folds earlier items (jay-home.js), so both grow
+   to their content; only the Talk thread keeps its own scroll. */
+@media (max-width: 1023.98px) {
+  .jay-home.jay-layout.is-fill {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: 580px auto auto;
+    grid-template-areas:
+      "talk talk"
+      "att today"
+      "bento bento";
+  }
+  .jay-home.jay-layout.is-fill > .jay-today { height: auto; min-height: 0; }
+  .jay-home :is(.jay-att-body, .jay-today-body) {
+    flex: 1 0 auto;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    padding-bottom: 12px;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+/* ── Phones: vertical app composition ── */
+.jay-home.is-mobile { display: flex; flex-direction: column; gap: var(--jay-gap); min-width: 0; padding-bottom: 4px; }
+.jay-m-hello { padding: 10px 4px 2px; min-width: 0; }
+.jay-m-greet { font-family: var(--jay-font-display); font-size: 24px; font-weight: 600; line-height: 1.25; letter-spacing: -0.015em; color: var(--jay-text); }
+.jay-m-date { margin-top: 2px; font-size: 13px; color: var(--jay-muted); }
+.jay-m-summary { min-height: 18px; margin-top: 8px; font-size: 12.5px; color: var(--jay-text-2); }
+.jay-m-summary .jay-skeleton { padding: 3px 0; }
+.jay-m-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.jay-m-ask { display: grid; gap: 12px; padding: 12px; }
+.jay-m-askrow { display: grid; grid-template-columns: minmax(0, 1fr) 50px; gap: 8px; }
+.jay-m-askbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 50px;
+  padding: 0 9px;
+  border-radius: var(--jay-r-lg);
+  background: var(--jay-inset);
+  border: 1px solid var(--jay-border);
+  text-align: left;
+}
+:root:not(.dark) .jay-m-askbox { border-color: var(--jay-border-strong); }
+.jay-m-askbox > .jay-av { border-radius: 9px; }
+.jay-m-askph { font-size: 15px; color: var(--jay-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jay-m-mic { display: grid; place-items: center; height: 50px; border-radius: var(--jay-r-lg); background: var(--jay-accent); color: var(--jay-on-accent); }
+.jay-m-mic:active { background: var(--jay-accent-strong); }
+.jay-m-mic:focus-visible { outline-color: var(--jay-accent-text); }
+.jay-m-quick { display: flex; gap: 6px; margin: 0 -12px; padding: 0 12px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.jay-m-quick::-webkit-scrollbar { display: none; }
+.jay-m-quick .jay-quick-chip { height: 36px; padding: 0 14px 0 12px; }
+.jay-home.is-mobile .jay-hp-head { min-height: 50px; padding: 10px 10px 6px 16px; }
+.jay-home.is-mobile .jay-hp-body { padding: 0 8px 10px; }
+.jay-home.is-mobile .jay-m-att .jay-hp-body { padding: 0 10px 10px; }
+.jay-home.is-mobile .jay-hp-row { min-height: 44px; }
+.jay-home.is-mobile .jay-cont-row { min-height: 52px; }
+.jay-home.is-mobile .jay-tl-item { padding: 9px 8px; }
+.jay-home.is-mobile .jay-status-row { min-height: 40px; font-size: 13.5px; }
+.jay-home.is-mobile .jay-feed-actions { max-width: none; }
+.jay-home.is-mobile .jay-feed-actions > .jay-btn { height: 40px; }
+.jay-home.is-mobile .jay-feed-target { font-size: 14px; }
+
+@media (max-width: 767.98px) {
+  .jay-talk-page { position: fixed; inset: 0; z-index: 3; height: var(--jay-vvh, 100dvh); background: var(--jay-surface); }
+  .jay-talk-page > .jay-layout.jay-talk-layout { height: 100%; grid-template-rows: minmax(0, 1fr); gap: 0; }
+  .jay-talk.is-focus.jay-box { border: 0; border-radius: 0; box-shadow: none; }
+  .jay-talk.is-focus .jay-talk-head { min-height: calc(60px + env(safe-area-inset-top, 0px)); padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px 12px; box-shadow: inset 0 -1px 0 var(--jay-border); }
+  .jay-talk.is-focus .jay-talk-id { gap: 10px; }
+  .jay-talk.is-focus .jay-talk-id > .jay-av { width: 36px; height: 36px; border-radius: 10px; font-size: 15px; }
+  .jay-talk.is-focus .jay-talk-name h2 { font-size: 16px; }
+  .jay-talk.is-focus .jay-talk-scroll { padding: 18px 14px 10px; --jay-talk-fade: 14px; }
+  .jay-talk.is-focus .jay-talk-foot { padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px)); box-shadow: inset 0 1px 0 var(--jay-border); }
+  .jay-talk.is-focus .jay-quick { flex-wrap: nowrap; overflow-x: auto; margin: 0 -10px 8px; padding: 0 10px; scrollbar-width: none; }
+  .jay-talk.is-focus .jay-quick::-webkit-scrollbar { display: none; }
+  .jay-talk.is-focus .jay-talk-conv { max-width: 40vw; }
+  .jay-talk.is-focus .jay-talk-actions .jay-circle-btn { width: 40px; height: 40px; }
+  .jay-talk-empty { padding-top: 5vh; }
+  .jay-talk-greeting, .jay-talk-prompt { font-size: 22px; }
+  .jay-msg.is-user { max-width: 86%; }
+  .jay-app[data-route="talk"] .jay-toasts { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* Touch: 40px+ targets for the small controls */
+@media (pointer: coarse) {
+  .jay-composer-left > .jay-icon-btn { width: 40px; height: 40px; }
+  .jay-cchip { height: 36px; }
+  .jay-send { width: 42px; height: 42px; }
+  .jay-talk .jay-quick-chip { height: 36px; }
+  .jay-hp-link { min-height: 40px; }
+  .jay-hp-head .jay-icon-btn, .jay-hp-head .jay-circle-btn { width: 40px; height: 40px; }
+  .jay-hp-row { min-height: 44px; }
+  .jay-tl-earlier { height: 40px; }
+  .jay-att-feed .jay-feed-actions > .jay-btn { height: 40px; }
+  /* Scoped to Home's feed so other screens' feeds keep their own sizing. */
+  .jay-att-feed .jay-feed-target { min-height: 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jay-typing i, .jay-listen-wave i { animation: none; }
+  .jay-hp-row, .jay-tl-item, .jay-suggest, .jay-composer, .jay-send, .jay-quick-chip { transition: none; }
+}
