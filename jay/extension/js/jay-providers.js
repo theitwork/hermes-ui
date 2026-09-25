@@ -23,21 +23,56 @@
   function changed(...domains) { domains.forEach((d) => JAY.emit('data:' + d)); }
 
   /* ── Mock adapter ───────────────────────────────────────────────────── */
+  // Earlier builds stored the demo under other keys (jay:demo-v1, …). Each blob
+  // is the whole dataset, including everything typed to Jay, and sits in Hermes'
+  // origin, so superseded ones are removed rather than left behind. The 'jay:'
+  // prefix is the one JAY.storage adds.
+  function sweepOldDemos() {
+    try {
+      const keep = 'jay:' + DEMO_KEY;
+      const stale = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const k = localStorage.key(i);
+        if (typeof k === 'string' && k.startsWith('jay:demo-') && k !== keep) stale.push(k);
+      }
+      stale.forEach((k) => localStorage.removeItem(k));
+    } catch (_) { /* storage blocked */ }
+  }
+  sweepOldDemos();
+
+  // Last resolve action per attention item (in memory; an Undo toast doesn't
+  // outlive the page). restoreAttention() reverses exactly that action.
+  const lastResolve = new Map();
+  // Delete snapshots by task id (in memory, same lifetime as the Undo toast).
+  // restoreTask() prefers this copy over the one the caller hands back.
+  const deletedTasks = new Map();
+
+  // Bumped when the dataset's shape changes (v3: task streams, demo user), so
+  // a blob saved earlier today is rebuilt instead of rendering without them.
+  const DEMO_SCHEMA = 3;
   let db = null;
   function load() {
     if (db) return db;
     const saved = JAY.storage.get(DEMO_KEY, null);
     // Mock dates are relative to the day the demo was built; rebuild daily so
     // "Today" never shows yesterday's agenda.
-    if (saved && saved.builtOn === JAY.fmt.isoDate(new Date()) && saved.data) db = saved.data;
+    if (saved && saved.builtOn === JAY.fmt.isoDate(new Date()) && saved.schema === DEMO_SCHEMA && saved.data) db = saved.data;
     else db = JAY.mock.build(new Date());
     return db;
   }
-  function persist() { JAY.storage.set(DEMO_KEY, { builtOn: JAY.fmt.isoDate(new Date()), data: db }); }
+  function persist() { JAY.storage.set(DEMO_KEY, { builtOn: JAY.fmt.isoDate(new Date()), schema: DEMO_SCHEMA, data: db }); }
   function latency() { return sleep(70 + Math.round(Math.random() * 90)); }
   function projectById(id) { return load().projects.find((p) => p.id === id) || null; }
   function personById(id) { return load().people.find((p) => p.id === id) || null; }
   function taskById(id) { return load().tasks.find((t) => t.id === id) || null; }
+  // A task's stream must be one of its project's streams; anything else
+  // (another project's stream, a stale one after a move, junk) becomes null.
+  function validStream(projectId, stream) {
+    if (typeof stream !== 'string' || !stream.trim()) return null;
+    const p = projectById(projectId);
+    const name = stream.trim();
+    return p && Array.isArray(p.streams) && p.streams.includes(name) ? name : null;
+  }
 
   function decorateTask(t) {
     const p = projectById(t.projectId);
@@ -81,7 +116,7 @@
       if (f.status && f.status !== 'all' && f.status !== 'open' && t.status !== f.status) return false;
       if (f.status === 'open' && t.status === 'done') return false;
       if (f.projectId && f.projectId !== 'all' && t.projectId !== f.projectId) return false;
-      if (f.owner && f.owner !== 'all' && t.assignee !== f.owner) return false;
+      if (f.owner && f.owner !== 'all' && f.owner !== 'any' && t.assignee !== f.owner) return false;
       if (f.due && f.due !== 'any') {
         const st = JAY.fmt.dueState(t.due, now);
         if (f.due === 'overdue' && !(st === 'overdue' && t.status !== 'done')) return false;
@@ -97,16 +132,30 @@
       return true;
     });
     const sort = f.sort || 'due';
-    const dueVal = (t) => (t.due ? new Date(t.due).getTime() : Number.MAX_SAFE_INTEGER);
+    // f.dir flips the primary key only. Defaults: newest first for 'updated',
+    // ascending for everything else. Tie-breaks always run ascending, undated
+    // tasks stay after dated ones either way, and 'due' keeps done tasks last.
+    const dir = f.dir === 'asc' || f.dir === 'desc' ? f.dir : (sort === 'updated' ? 'desc' : 'asc');
+    const sign = dir === 'desc' ? -1 : 1;
+    const dueVal = (t) => { const v = t.due ? new Date(t.due).getTime() : NaN; return Number.isFinite(v) ? v : null; };
+    const byDue = (a, b, s) => {
+      const x = dueVal(a);
+      const y = dueVal(b);
+      if (x === y) return 0;
+      if (x === null) return 1;
+      if (y === null) return -1;
+      return s * (x - y);
+    };
+    const byPriority = (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
     out.sort((a, b) => {
-      if (sort === 'priority') return (PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]) || (dueVal(a) - dueVal(b));
-      if (sort === 'updated') return new Date(b.updatedAt) - new Date(a.updatedAt);
-      if (sort === 'title') return a.title.localeCompare(b.title);
-      if (sort === 'status') return (STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status)) || (dueVal(a) - dueVal(b));
+      if (sort === 'priority') return (sign * byPriority(a, b)) || byDue(a, b, 1);
+      if (sort === 'updated') return sign * (new Date(a.updatedAt) - new Date(b.updatedAt));
+      if (sort === 'title') return sign * String(a.title || '').localeCompare(String(b.title || ''));
+      if (sort === 'status') return (sign * (STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status))) || byDue(a, b, 1);
       // due: open first, then by date
       const doneA = a.status === 'done' ? 1 : 0;
       const doneB = b.status === 'done' ? 1 : 0;
-      return (doneA - doneB) || (dueVal(a) - dueVal(b)) || (PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
+      return (doneA - doneB) || byDue(a, b, sign) || byPriority(a, b);
     });
     return out;
   }
@@ -195,13 +244,27 @@
     async getIntegrations() { await latency(); return clone(load().integrations); },
     async getAgendaItem(id) { const a = load().agenda.find((x) => x.id === id); return a ? clone(a) : null; },
     async getPerson(id) { const p = personById(id); return p ? clone(p) : null; },
+    // The signed-in (demo) user. No latency: the shell resolves JAY.me with it
+    // before the first route.
+    async getUser() {
+      const d = load();
+      const u = d.user || {};
+      const self = d.people.find((p) => p.relation === 'self') || {};
+      return {
+        id: String(u.id || self.id || 'pat'),
+        name: String(u.name || self.name || 'Pat'),
+        context: String(u.context || 'Personal'),
+        workspace: String(u.workspace || 'Main'),
+      };
+    },
 
     async createTask(input) {
       const d = load();
       const now = new Date().toISOString();
+      const projectId = input.projectId || 'personal';
       const t = {
         id: JAY.nextId('task'), title: String(input.title || '').trim() || 'Untitled task',
-        projectId: input.projectId || 'personal', status: input.status || 'inbox', priority: input.priority || 'medium',
+        projectId, stream: validStream(projectId, input.stream), status: input.status || 'inbox', priority: input.priority || 'medium',
         due: input.due || null, assignee: input.assignee || 'pat', tags: input.tags || [], description: input.description || '',
         createdAt: now, updatedAt: now, source: input.source || 'manual',
         checklist: Array.isArray(input.checklist) ? input.checklist.map((c) => ({ text: String(c.text || ''), done: !!c.done })) : [],
@@ -222,6 +285,8 @@
       const nowIso = new Date().toISOString();
       const statusChanged = patch.status && patch.status !== t.status;
       Object.assign(t, patch, { updatedAt: nowIso });
+      // A move to another project drops a stream that project doesn't have.
+      if ('stream' in patch || 'projectId' in patch) t.stream = validStream(t.projectId, t.stream);
       if (patch.checklist || statusChanged) t.progress = progressOf(t);
       t.lastEvent = { at: nowIso, label: statusChanged ? 'Status' : (patch.checklist ? 'Checklist' : 'Edited') };
       persist();
@@ -242,35 +307,96 @@
       t.updatedAt = new Date().toISOString();
       t.progress = progressOf(t);
       t.lastEvent = { at: t.updatedAt, label: 'Status' };
-      load().attention.forEach((a) => { if (a.taskId === id) a.resolved = markDone; });
+      load().attention.forEach((a) => { if (a.taskId === id) { a.resolved = markDone; delete a.resolvedBy; } });
       persist();
       changed('tasks', 'today', 'projects', 'attention');
       return decorateTask(t);
     },
+    // Deleting a task resolves the attention items that point at it and returns
+    // a snapshot for restoreTask(): the task as stored, its index, and the ids
+    // of the items this delete resolved (items already resolved stay out).
     async deleteTask(id) {
       const d = load();
-      d.tasks = d.tasks.filter((t) => t.id !== id);
+      const index = d.tasks.findIndex((t) => t.id === id);
+      if (index < 0) throw new Error('Task not found');
+      const task = d.tasks[index];
+      const attentionIds = [];
+      d.attention.forEach((a) => {
+        if (a.taskId !== id || a.resolved) return;
+        a.resolved = true;
+        a.resolvedBy = 'delete';
+        attentionIds.push(a.id);
+      });
+      d.tasks.splice(index, 1);
+      const snapshot = { task: clone(task), index, attentionIds };
+      deletedTasks.set(id, snapshot);
       persist();
-      changed('tasks', 'today', 'projects');
+      changed('tasks', 'today', 'projects', 'attention');
+      return clone(snapshot);
     },
-    async resolveAttention(id, action) {
+    // Undo for deleteTask: the task goes back at its index with the same id,
+    // createdAt and prevStatus, and only the items that delete resolved come
+    // back. The in-memory snapshot wins over the caller's copy; a caller copy
+    // is used only when that is gone, and even then only items still marked
+    // resolvedBy 'delete' for this task are reopened.
+    async restoreTask(snapshot) {
+      const d = load();
+      const givenId = snapshot && typeof snapshot === 'object' && snapshot.task && typeof snapshot.task === 'object' ? snapshot.task.id : null;
+      if (typeof givenId !== 'string' || !givenId) throw new Error('Nothing to restore');
+      const snap = deletedTasks.get(givenId) || snapshot;
+      deletedTasks.delete(givenId);
+      if (taskById(givenId)) return decorateTask(taskById(givenId)); // already back
+      if (typeof snap.task.title !== 'string') throw new Error('Nothing to restore');
+      const task = clone(snap.task);
+      task.stream = validStream(task.projectId, task.stream);
+      const at = Number.isInteger(snap.index) ? Math.min(Math.max(snap.index, 0), d.tasks.length) : 0;
+      d.tasks.splice(at, 0, task);
+      const ids = new Set(Array.isArray(snap.attentionIds) ? snap.attentionIds : []);
+      d.attention.forEach((a) => {
+        if (!ids.has(a.id) || a.taskId !== givenId || a.resolvedBy !== 'delete') return;
+        a.resolved = false;
+        delete a.resolvedBy;
+      });
+      persist();
+      changed('tasks', 'today', 'projects', 'attention');
+      return decorateTask(task);
+    },
+    // opts.until (snooze only): an ISO date in the future; anything else
+    // falls back to three hours from now.
+    async resolveAttention(id, action, opts) {
       const a = load().attention.find((x) => x.id === id);
       if (!a) throw new Error('Attention item not found');
+      lastResolve.set(id, action);
       if (action === 'done' && a.taskId) return mock.completeTask(a.taskId, true);
-      if (action === 'snooze') a.snoozedUntil = new Date(Date.now() + 3 * 3600000).toISOString();
-      else a.resolved = true;
+      if (action === 'snooze') {
+        const nowMs = Date.now();
+        const req = opts && typeof opts.until === 'string' ? new Date(opts.until).getTime() : NaN;
+        a.snoozedUntil = new Date(Number.isFinite(req) && req > nowMs ? req : nowMs + 3 * 3600000).toISOString();
+      } else a.resolved = true;
       persist();
       changed('attention');
       return clone(a);
     },
-    async restoreAttention(id) {
+    // Undo for resolveAttention. opts.action names the action being undone;
+    // without it the action recorded by resolveAttention is used. Only undoing
+    // "done" reopens the linked task, and it does so through completeTask, which
+    // recomputes progress, clears prevStatus, stamps lastEvent and brings the
+    // linked items back. Undoing anything else never touches the task, and an
+    // item whose task is done stays resolved (completeTask's invariant).
+    async restoreAttention(id, opts) {
       const a = load().attention.find((x) => x.id === id);
       if (!a) return;
-      a.resolved = false;
+      const action = (opts && opts.action) || lastResolve.get(id) || null;
+      lastResolve.delete(id);
+      const t = a.taskId ? taskById(a.taskId) : null;
+      if (action === 'done' && t && t.status === 'done') {
+        await mock.completeTask(t.id, false);
+        return;
+      }
       delete a.snoozedUntil;
-      if (a.taskId) { const t = taskById(a.taskId); if (t && t.status === 'done') { t.status = t.prevStatus || 'next'; } }
+      if (action !== 'snooze' && !(t && t.status === 'done')) { a.resolved = false; delete a.resolvedBy; }
       persist();
-      changed('attention', 'tasks', 'today', 'projects');
+      changed('attention');
     },
     async addReminder(input) {
       const d = load();
@@ -317,7 +443,7 @@
       persist();
       return c.id;
     },
-    reset() { db = null; JAY.storage.remove(DEMO_KEY); load(); DOMAINS.forEach((dm) => changed(dm)); },
+    reset() { db = null; lastResolve.clear(); deletedTasks.clear(); JAY.storage.remove(DEMO_KEY); sweepOldDemos(); load(); DOMAINS.forEach((dm) => changed(dm)); },
   };
 
   /* ── Hermes adapter: opt-in, read-only (GET only) ─────────────────── */
@@ -365,16 +491,16 @@
   const DOMAIN_OF = {
     getTodayItems: 'today', getTodaySummary: 'today', getAgendaItem: 'today', addReminder: 'today',
     getAttentionItems: 'attention', resolveAttention: 'attention', restoreAttention: 'attention',
-    getTasks: 'tasks', getTask: 'tasks', getTaskCounts: 'tasks', createTask: 'tasks', updateTask: 'tasks', completeTask: 'tasks', deleteTask: 'tasks',
+    getTasks: 'tasks', getTask: 'tasks', getTaskCounts: 'tasks', createTask: 'tasks', updateTask: 'tasks', completeTask: 'tasks', deleteTask: 'tasks', restoreTask: 'tasks',
     getProjects: 'projects', getProject: 'projects', createProject: 'projects', updateProject: 'projects',
     getRecentSessions: 'sessions',
     getConversation: 'chat', appendMessage: 'chat', newConversation: 'chat',
     getSystemStatus: 'system', getAutomations: 'system',
-    getPeople: 'people', getPerson: 'people',
+    getPeople: 'people', getPerson: 'people', getUser: 'people',
     getIntegrations: 'integrations',
   };
   let sim = Object.assign({}, JAY.storage.get('simulate', {}));
-  const SINGLE_ITEM = new Set(['getTask', 'getProject', 'getAgendaItem', 'getPerson', 'getConversation']);
+  const SINGLE_ITEM = new Set(['getTask', 'getProject', 'getAgendaItem', 'getPerson', 'getConversation', 'getUser']);
 
   function adapterFor(domain, method) {
     const chosen = adapters[selection[domain]];
@@ -416,7 +542,7 @@
     },
     simulated() { return Object.assign({}, sim); },
     clearSimulations() { const ds = Object.keys(sim); sim = {}; JAY.storage.remove('simulate'); ds.forEach((d) => changed(d)); },
-    resetDemo() { mock.reset(); },
+    resetDemo() { mock.reset(); JAY.emit('data:reset'); },
     isMock(domain) { return (selection[domain] || 'mock') === 'mock'; },
   });
 })();

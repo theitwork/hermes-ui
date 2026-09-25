@@ -22,11 +22,11 @@
   --jay-surface: #FFFFFF;     /* floating panels (.jay-box) */
   --jay-surface-2: #F5F5F2;   /* cards / raised rows inside panels */
   --jay-surface-3: #EAEAE6;   /* hover fills, neutral chips, active nav pill */
-  --jay-inset: #F0F0EC;       /* search fields, inset buttons, table head */
+  --jay-inset: #F0F0EC;       /* search fields, inset buttons */
   --jay-elevated: #FFFFFF;    /* drawers, menus, palette */
   --jay-text: #161616;
   --jay-text-2: #4D4D4D;
-  --jay-muted: #6B6B6B;
+  --jay-muted: #5F5F5F;       /* ≥ 5.1:1 on canvas, surface-2, surface-3 and inset */
   --jay-faint: #A3A3A3;
   --jay-border: rgba(0, 0, 0, 0.075);
   --jay-border-strong: rgba(0, 0, 0, 0.14);
@@ -35,14 +35,14 @@
 
   --jay-accent: #A7E05F;          /* lime fill (buttons, logo, active bar, badges) */
   --jay-accent-strong: #97D24C;   /* lime fill hover */
-  --jay-accent-text: #4A7A12;     /* lime-family text on light surfaces (5.1:1 on white) */
+  --jay-accent-text: #3E6A0C;     /* lime-family text on light surfaces (6.4:1 on white, ≥ 5.1:1 on canvas) */
   --jay-accent-soft: rgba(122, 184, 42, 0.16);
   --jay-accent-softer: rgba(122, 184, 42, 0.09);
   --jay-on-accent: #10190A;       /* text on lime fill */
 
-  --jay-danger: #D93B2B;
-  --jay-danger-soft: rgba(217, 59, 43, 0.10);
-  --jay-warning: #9A6A00;
+  --jay-danger: #B8301F;          /* 4.8:1 on canvas, 5.5:1 on surface-2; white on it 6.0:1 */
+  --jay-danger-soft: rgba(184, 48, 31, 0.10);
+  --jay-warning: #805800;         /* 5.1:1 on canvas, 5.8:1 on surface-2 */
   --jay-warning-soft: rgba(214, 160, 20, 0.14);
   --jay-info: #2F6FB2;
   --jay-info-soft: rgba(47, 111, 178, 0.10);
@@ -53,7 +53,7 @@
   --jay-hue-blue: #2563EB;
   --jay-hue-purple: #7C3AED;
   --jay-hue-green: #15803D;
-  --jay-hue-lime: #4A7A12;
+  --jay-hue-lime: #3E6A0C;
   --jay-hue-orange: #C2410C;
   --jay-hue-red: #DC2626;
   --jay-hue-yellow: #A16207;
@@ -103,18 +103,20 @@
 }
 
 :root.dark {
-  /* ── Dark — near-black canvas, charcoal floating panels, lime ── */
-  --jay-canvas: #0A0A0A;
-  --jay-bg: #0A0A0A;
-  --jay-surface: #1B1B1B;
-  --jay-surface-2: #242424;
-  --jay-surface-3: #2D2D2D;
-  --jay-inset: #141414;
-  --jay-elevated: #202020;
+  /* ── Dark — soft charcoal canvas, lighter charcoal floating panels, lime.
+     Sampled from the Deepsleep reference: canvas and inset wells #1C1C1C,
+     panels #2A2A2A. Muted text stays ≥ 4.5:1 up to surface-3. ── */
+  --jay-canvas: #1C1C1C;
+  --jay-bg: #1C1C1C;
+  --jay-surface: #2A2A2A;
+  --jay-surface-2: #323232;
+  --jay-surface-3: #383838;
+  --jay-inset: #1F1F1F;
+  --jay-elevated: #2E2E2E;    /* drawers, menus: a hair lighter than panels */
   --jay-text: #F4F4F4;
-  --jay-text-2: #B5B5B5;
-  --jay-muted: #8C8C8C;
-  --jay-faint: #5E5E5E;
+  --jay-text-2: #BDBDBD;
+  --jay-muted: #A3A3A3;       /* 5.7:1 on surface, 5.1:1 on surface-2, 4.6:1 on surface-3 */
+  --jay-faint: #6E6E6E;
   --jay-border: rgba(255, 255, 255, 0.065);
   --jay-border-strong: rgba(255, 255, 255, 0.12);
   --jay-hover: rgba(255, 255, 255, 0.045);
@@ -127,8 +129,8 @@
   --jay-accent-softer: rgba(167, 224, 95, 0.07);
   --jay-on-accent: #10190A;
 
-  --jay-danger: #F26B5E;
-  --jay-danger-soft: rgba(242, 107, 94, 0.13);
+  --jay-danger: #FF7B6E;          /* ≥ 5:1 on surface-2 */
+  --jay-danger-soft: rgba(255, 123, 110, 0.13);
   --jay-warning: #F5C542;
   --jay-warning-soft: rgba(245, 197, 66, 0.13);
   --jay-info: #5FB0DF;
@@ -178,16 +180,16 @@
   --code-bg: #EFEFEB; --topbar-bg: rgba(236, 236, 232, 0.98); --main-bg: rgba(243, 243, 240, 0.6);
   --focus-ring: rgba(122, 184, 42, 0.4); --focus-glow: rgba(122, 184, 42, 0.12);
   --hover-bg: rgba(0, 0, 0, 0.05); --input-bg: rgba(0, 0, 0, 0.03);
-  --success: #1E9E5A; --warning: #9A6A00; --error: #D93B2B; --info: #2F6FB2;
+  --success: #1E9E5A; --warning: #805800; --error: #B8301F; --info: #2F6FB2;
 }
 :root.dark[data-skin="jay"] {
-  --bg: #0F0F0F; --sidebar: #161616; --surface: #1B1B1B; --border: #2A2A2A;
-  --border2: rgba(255, 255, 255, 0.12); --text: #F4F4F4; --muted: #A0A0A0;
+  --bg: #1C1C1C; --sidebar: #242424; --surface: #2A2A2A; --border: #383838;
+  --border2: rgba(255, 255, 255, 0.12); --text: #F4F4F4; --muted: #A3A3A3;
   --accent: #A7E05F; --accent-hover: #B9EC7B; --accent-bg: rgba(167, 224, 95, 0.10);
   --accent-bg-strong: rgba(167, 224, 95, 0.18); --accent-text: #B4E878;
-  --code-bg: #161616; --topbar-bg: rgba(22, 22, 22, 0.98); --main-bg: rgba(15, 15, 15, 0.6);
+  --code-bg: #242424; --topbar-bg: rgba(36, 36, 36, 0.98); --main-bg: rgba(28, 28, 28, 0.6);
   --focus-ring: rgba(167, 224, 95, 0.4); --focus-glow: rgba(167, 224, 95, 0.1);
   --hover-bg: rgba(255, 255, 255, 0.055); --input-bg: rgba(255, 255, 255, 0.035);
-  --success: #3CCB7F; --warning: #F5C542; --error: #F26B5E; --info: #5FB0DF;
-  --strong: #FFFFFF; --em: #B5B5B5;
+  --success: #3CCB7F; --warning: #F5C542; --error: #FF7B6E; --info: #5FB0DF;
+  --strong: #FFFFFF; --em: #BDBDBD;
 }

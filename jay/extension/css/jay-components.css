@@ -104,12 +104,14 @@
 
 /* ── Layout grid of panels ──
    .jay-layout             one column
-   .has-side               [side 264] [main]           — first child is the side panel
+   .has-side               [side 264] [main]           — first child is the side panel (.jay-side)
    .has-aside              [main] [aside 336]          — last child is the aside panel
    .has-side.has-aside     [side] [main] [aside]
    .is-fill                fills the view height; children get min-height:0 so their
                            own scroll regions (.is-scroll / .jay-side-scroll) scroll.
-   < 1280px the aside stacks under main; < 1024px the side panel is hidden. */
+   < 1280px the aside stacks under main; < 1024px the side panel is hidden.
+   Responsive rules target the side panel by class (> .jay-side), never by
+   position, so a layout whose tree is not rendered yet never hides its main panel. */
 .jay-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -138,7 +140,7 @@
   .jay-view:has(> * > .jay-layout.has-aside.is-fill),
   .jay-view > :has(> .jay-layout.has-aside.is-fill) { height: auto; }
   .jay-layout.has-aside.is-fill > .jay-box:not(.jay-side, .is-col) { overflow: visible; }
-  .jay-layout.has-side.has-aside > :first-child { grid-row: 1 / span 2; }
+  .jay-layout.has-side.has-aside > .jay-side { grid-row: 1 / span 2; }
   .jay-layout.has-side.has-aside.is-fill > .jay-side {
     position: sticky;
     top: 0;
@@ -150,8 +152,8 @@
 @media (max-width: 1023.98px) {
   .jay-layout.has-side { grid-template-columns: minmax(0, 1fr); }
   .jay-layout.has-side.has-aside { grid-template-columns: minmax(0, 1fr); }
-  .jay-layout.has-side > :first-child { display: none; }
-  .jay-layout.has-side.has-aside > :first-child { grid-row: auto; }
+  .jay-layout.has-side > .jay-side { display: none; }
+  .jay-layout.has-side.has-aside > .jay-side { grid-row: auto; }
 }
 @media (max-width: 767.98px) {
   .jay-layout.is-fill { height: auto; grid-template-rows: none; }
@@ -175,6 +177,7 @@
 .jay-side-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   margin: 0 -4px;
@@ -209,7 +212,8 @@
   color: var(--jay-muted);
 }
 .jay-side-section + .jay-side-section > .jay-side-title { margin: 8px -4px 0; padding: 16px 14px 6px; border-top: 1px solid var(--jay-border); }
-.jay-side-list { display: grid; gap: 2px; padding: 2px 0 8px; margin: 0; }
+.jay-side-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 2px 0 8px; margin: 0; }
+.jay-side-list > li { min-width: 0; }
 .jay-side-list[hidden] { display: none; }
 .jay-side-head + .jay-side-list { --jay-side-in: 30px; }
 .jay-side-item {
@@ -234,6 +238,18 @@
 .jay-side-item:hover { background: var(--jay-hover); color: var(--jay-text); }
 .jay-side-item:focus-visible { outline-offset: -2px; }
 .jay-side-item.is-active { background: var(--jay-accent-softer); color: var(--jay-accent-text); font-weight: 500; }
+/* Light mode: the pale lime tint alone is too faint on white, so the active row
+   gets a stronger tint, heavier label and a 3px olive bar on its leading edge.
+   Tight left corners keep the bar a straight edge instead of a crescent. */
+:root:not(.dark) .jay-side-item.is-active {
+  background: var(--jay-accent-soft);
+  font-weight: 600;
+  border-radius: 3px var(--jay-r-md) var(--jay-r-md) 3px;
+  box-shadow: inset 3px 0 0 var(--jay-accent-text);
+}
+/* A parent row that is active only because a child row below it is the
+   selection (project → stream) keeps no bar; the bar marks one row. */
+:root:not(.dark) .jay-side-list > li:has(~ li > .jay-side-item.is-active) > .jay-side-item.is-active { box-shadow: none; }
 .jay-side-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jay-side-icon { color: var(--jay-muted); flex-shrink: 0; }
 .jay-side-item:hover .jay-side-icon { color: var(--jay-text-2); }
@@ -295,6 +311,8 @@
 .jay-tab:focus-visible { outline-offset: -3px; }
 .jay-tab.is-active { color: var(--jay-text); }
 .jay-tab.is-active::after { background: var(--jay-accent); }
+/* Light mode: lime on white is < 3:1, so the active underline uses olive. */
+:root:not(.dark) .jay-tab.is-active::after { background: var(--jay-accent-text); }
 :root.dark .jay-tab.is-active { color: var(--jay-accent-text); }
 .jay-tab > .jay-icon { color: currentColor; }
 .jay-tab > .jay-badge { height: 18px; min-width: 18px; padding: 0 5px; font-size: 10.5px; }
@@ -302,6 +320,14 @@
 .jay-tabs.is-boxed { box-shadow: none; padding: 0 var(--jay-pad); gap: 26px; }
 .jay-tabs.is-boxed .jay-tab { height: 56px; }
 .jay-tabs.is-boxed .jay-tab::after { left: -8px; right: -8px; height: 3px; border-radius: 3px 3px 0 0; }
+/* Deepsleep tab bars (boxed panels, Home Attention): inactive tabs are primary
+   text, only the active tab is lime + underlined. CRM-style plain tabs (Tasks
+   List/Board) keep the muted inactive colour. */
+:root.dark :is(.jay-att-tabbar, .jay-tabs.is-boxed) .jay-tab:not(.is-active) { color: var(--jay-text); }
+:root.dark .jay-tabs.is-boxed .jay-tab:not(.is-active) { font-weight: 400; }
+:root:not(.dark) :is(.jay-att-tabbar, .jay-tabs.is-boxed) .jay-tab:not(.is-active) { color: var(--jay-text-2); }
+:is(.jay-att-tabbar, .jay-tabs.is-boxed) .jay-tab:not(.is-active):hover { color: var(--jay-text); }
+:is(.jay-att-tabbar, .jay-tabs.is-boxed) .jay-tab:not(.is-active):hover::after { background: var(--jay-border-strong); }
 
 /* ── Buttons ── */
 .jay-btn {
@@ -469,6 +495,13 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
+/* Dark mode: tinted tags read like the CRM — a pale tint of the hue on a dark
+   hue fill, not full-saturation hue text. */
+:root.dark .jay-tag:not(.is-solid, .is-more) {
+  --jay-h-ink: color-mix(in srgb, var(--jay-h) 62%, var(--jay-text));
+  background: color-mix(in srgb, var(--jay-h) 16%, var(--jay-surface));
+  border-color: color-mix(in srgb, var(--jay-h) 26%, transparent);
+}
 .jay-tag.is-more { border-color: transparent; background: var(--jay-surface-3); color: var(--jay-text-2); padding: 0 7px; font-variant-numeric: tabular-nums; }
 .jay-tag.is-solid {
   height: 18px;
@@ -576,7 +609,6 @@
 }
 .jay-quick-chip:hover { background: var(--jay-surface-3); color: var(--jay-text); }
 .jay-quick-chip.is-active { background: var(--jay-accent-soft); border-color: color-mix(in srgb, var(--jay-accent) 40%, transparent); color: var(--jay-accent-text); }
-.jay-tone-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2.5px; flex-shrink: 0; }
 
 /* Kind + level colour hooks (timeline, attention) */
 .is-event { --kind: var(--jay-info); }
@@ -655,20 +687,29 @@
 .jay-avatar.is-xs { width: 22px; height: 22px; font-size: 9.5px; }
 .jay-avatar.is-jay { background: var(--jay-accent); color: var(--jay-on-accent); border-radius: 30%; font-family: var(--jay-font-display); font-weight: 700; }
 
-/* ── Segmented meter (CRM "Win Probability") ── */
+/* ── Segmented meter (CRM "Win Probability"): 16 hairline bars; the filled
+      run ramps red → green (colour classes are set per bar by JAY.ui.meter). ── */
 .jay-meter { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
-.jay-meter-bars { display: inline-flex; align-items: center; gap: 2px; height: 12px; flex-shrink: 0; }
-.jay-meter-bars > i { display: block; width: 3px; height: 12px; border-radius: 1px; background: var(--jay-meter-off); }
+.jay-meter-bars { display: inline-flex; align-items: center; gap: 2px; height: 10px; flex-shrink: 0; }
+.jay-meter-bars > i { display: block; width: 2px; height: 10px; border-radius: 1px; background: var(--jay-meter-off); }
 .jay-meter-bars > i.is-on.is-b1 { background: var(--jay-meter-1); }
 .jay-meter-bars > i.is-on.is-b2 { background: var(--jay-meter-2); }
 .jay-meter-bars > i.is-on.is-b3 { background: var(--jay-meter-3); }
 .jay-meter-bars > i.is-on.is-b4 { background: var(--jay-meter-4); }
+/* Flat gauge (meter(v, { ramp: false, tone })): one colour for "used" values. */
+.jay-meter.is-flat { --jay-meter-flat: var(--jay-text-2); }
+.jay-meter.is-flat.is-good { --jay-meter-flat: var(--jay-good); }
+.jay-meter.is-flat.is-warning { --jay-meter-flat: var(--jay-warning); }
+.jay-meter.is-flat.is-danger { --jay-meter-flat: var(--jay-danger); }
+.jay-meter.is-flat.is-accent { --jay-meter-flat: var(--jay-accent); }
+.jay-meter.is-flat .jay-meter-bars > i.is-on { background: var(--jay-meter-flat); }
 .jay-meter-val { min-width: 4ch; text-align: right; font-size: 12.5px; font-weight: 500; color: var(--jay-text); font-variant-numeric: tabular-nums; line-height: 1; }
 
 /* ── Sparkline (CRM "Activity Trend") ── */
-.jay-spark { display: inline-flex; align-items: flex-end; gap: 2px; height: 18px; flex-shrink: 0; }
+.jay-spark { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; flex-shrink: 0; }
 .jay-spark > i { display: block; width: 3px; min-height: 2px; border-radius: 1px 1px 0 0; background: var(--jay-h); }
 .jay-spark > i.is-zero { height: 2px !important; border-radius: 1px; opacity: 0.5; }
+.jay-spark > i.is-fail { background: var(--jay-hue-red); }   /* one failed run, not the whole row */
 
 /* Thin progress bar (legacy) */
 .jay-progress { display: block; position: relative; height: 4px; border-radius: var(--jay-r-pill); background: var(--jay-meter-off); overflow: hidden; }
@@ -699,6 +740,10 @@
   background: var(--jay-accent);
 }
 :root:not(.dark) .jay-feed-item.is-unread::after { background: var(--jay-accent-text); }
+/* Dark mode: feed cards are recessed wells on the panel (Deepsleep), and their
+   file / quote chips sit a step lighter than the card. */
+:root.dark .jay-feed-item { --jay-av-ring: var(--jay-inset); background: var(--jay-inset); }
+:root.dark :is(.jay-feed-att, .jay-feed-quote) { background: var(--jay-surface-2); }
 .jay-feed-item > .jay-av { border-radius: 10px; }
 .jay-feed-item > .jay-av.is-jay { border-radius: 10px; }
 .jay-feed-icon {
@@ -720,7 +765,7 @@
   justify-self: start;
   max-width: 100%;
   margin-top: 1px;
-  font-family: var(--jay-font-display);
+  font-family: var(--jay-font);
   font-size: 13px;
   font-weight: 500;
   line-height: 1.4;
@@ -730,6 +775,8 @@
 }
 button.jay-feed-target { border-radius: 4px; }
 button.jay-feed-target:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* Lime means "you can open this". A target with no destination reads as text. */
+span.jay-feed-target { color: var(--jay-text); font-weight: 600; }
 .jay-feed-ctx { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 7px; margin-top: 3px; font-size: 11.5px; line-height: 1.4; color: var(--jay-muted); }
 .jay-feed-att {
   display: flex;
@@ -772,6 +819,10 @@ button.jay-feed-target:hover { text-decoration: underline; text-underline-offset
 }
 .jay-feed-actions { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; max-width: 300px; margin-top: 12px; }
 .jay-feed-actions > .jay-btn { height: 32px; padding: 0 10px; border-radius: var(--jay-r-sm); }
+/* Deepsleep "Decline": a near-white 1px outline next to the lime button. Only
+   the feed actions; CRM toolbar outlines (Export, drawers) stay subtle. */
+:root.dark .jay-feed-actions .jay-btn.is-outline { border-color: color-mix(in srgb, var(--jay-text) 60%, transparent); }
+:root.dark .jay-feed-actions .jay-btn.is-outline:hover { border-color: color-mix(in srgb, var(--jay-text) 80%, transparent); }
 /* Light mode: the feed card is a light grey inset, so its chips lift to white. */
 :root:not(.dark) .jay-feed-att, :root:not(.dark) .jay-feed-quote { background: var(--jay-surface); box-shadow: 0 0 0 1px var(--jay-border); }
 
@@ -795,6 +846,13 @@ button.jay-feed-target:hover { text-decoration: underline; text-underline-offset
 .jay-input[aria-invalid="true"] { border-color: var(--jay-danger); }
 .jay-input.is-inset { border-color: transparent; height: 40px; border-radius: var(--jay-r-lg); }
 .jay-input.is-inset:hover { border-color: var(--jay-border); }
+/* Visible focus on every field. Specificity (0,6,0) deliberately beats the
+   inset/search variants, screen rules and Hermes' `:root:not(.dark) select`. */
+:root .jay-app .jay-input.jay-input:is(:focus, :focus-visible):not([aria-invalid="true"]) {
+  outline: none;
+  border-color: var(--jay-accent-text);
+  box-shadow: 0 0 0 1px var(--jay-accent-text), 0 0 0 4px var(--jay-accent-soft);
+}
 .jay-input.is-search { padding-left: 38px; }
 .jay-input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
 textarea.jay-input { height: auto; min-height: 84px; padding: 10px 12px; line-height: 1.5; resize: vertical; }
@@ -843,6 +901,12 @@ select.jay-input {
 .jay-tip > div { flex: 1; }
 .jay-tip strong { color: var(--jay-text); font-weight: 600; }
 .jay-tip .jay-link { flex-shrink: 0; }
+
+/* ── Date cell (CRM "Last Interaction": "▢ Sep 18 | 6d ago") — JAY.ui.dateCell ── */
+.jay-date-cell { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; color: var(--jay-text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.jay-date-cell > .jay-icon { color: var(--jay-muted); flex-shrink: 0; }
+.jay-date-cell > .jay-sep { padding: 0; }
+.jay-date-cell-l { min-width: 0; color: var(--jay-text-2); overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Detail content (drawers) ── */
 .jay-detail { display: grid; gap: 18px; }
@@ -907,15 +971,19 @@ select.jay-input {
 .jay-panel-wrap.is-open .jay-panel.is-center { transform: translate(-50%, 0); opacity: 1; }
 .jay-panel.is-center .jay-panel-head { display: none; }
 .jay-panel.is-center .jay-panel-body { padding: 12px; }
+/* Phone sheet. The shell publishes --jay-kb (soft-keyboard height) and
+   --jay-vvh (visible height), so the sheet rides above the keyboard, stays
+   inside the visible area, and drops the home-indicator inset while the
+   keyboard covers it. Closed, it slides fully below the keyboard. */
 .jay-panel.is-sheet {
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--jay-kb, 0px);
   max-height: calc(var(--jay-vvh, 100dvh) - 32px);
   border-radius: 22px 22px 0 0;
   border-bottom: 0;
-  transform: translateY(100%);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  transform: translateY(calc(100% + var(--jay-kb, 0px)));
+  padding-bottom: max(0px, env(safe-area-inset-bottom, 0px) - var(--jay-kb, 0px));
 }
 .jay-panel-wrap.is-open .jay-panel.is-sheet { transform: none; }
 .jay-sheet-grabber { width: 40px; height: 4px; border-radius: var(--jay-r-pill); background: var(--jay-border-strong); margin: 8px auto 0; flex-shrink: 0; }
@@ -1096,6 +1164,21 @@ select.jay-input {
   select.jay-input, .jay-input.is-compact { font-size: 16px; }
   .jay-side-search > .jay-input { font-size: 16px; }
   .jay-toast-action { padding: 10px 12px; }
+}
+
+/* Forced colors (Windows High Contrast): tints and inset shadows vanish, so
+   active / checked / focused states move to Highlight outlines, and the
+   meter and sparkline bars keep their own colours (they carry the data). */
+@media (forced-colors: active) {
+  .jay-menu-item:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
+  /* :root .jay-app ties the light-mode underline rule and wins by order. */
+  :root .jay-app .jay-tab.is-active::after { background: Highlight; forced-color-adjust: none; }
+  .jay-side-item.is-active,
+  .jay-segmented > :is([aria-checked="true"], [aria-pressed="true"], [aria-selected="true"]) { outline: 2px solid Highlight; outline-offset: -2px; }
+  .jay-meter-bars i, .jay-spark i { forced-color-adjust: none; }
+  /* The border is an unchecked box's only cue; (0,3,0) beats the Tasks
+     stylesheet's own border rules, which load after this file. */
+  :root .jay-app :is(.jay-check, .jay-tcb) { border-color: CanvasText; }
 }
 
 @media (prefers-reduced-motion: reduce) {

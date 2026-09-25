@@ -17,16 +17,17 @@ JAY adopts that look for both modes. Dark is primary; light uses the same struct
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
-| `--jay-canvas` | `#0A0A0A` | `#E6E6E2` | Page behind panels |
-| `--jay-surface` | `#1B1B1B` | `#FFFFFF` | Floating panels (`.jay-box`) |
-| `--jay-surface-2` | `#242424` | `#F5F5F2` | Cards and raised rows inside panels |
-| `--jay-surface-3` | `#2D2D2D` | `#EAEAE6` | Hover fills, neutral chips, active nav pill |
-| `--jay-inset` | `#141414` | `#F0F0EC` | Search fields, inset buttons ("Add Subtask"), table head |
-| `--jay-elevated` | `#202020` | `#FFFFFF` | Drawers, menus, palette |
-| `--jay-text` / `-2` / `muted` / `faint` | `#F4F4F4` / `#B5B5B5` / `#8C8C8C` / `#5E5E5E` | `#161616` / `#4D4D4D` / `#6B6B6B` / `#A3A3A3` | Text ladder |
+| `--jay-canvas` | `#1C1C1C` | `#E6E6E2` | Page behind panels |
+| `--jay-surface` | `#2A2A2A` | `#FFFFFF` | Floating panels (`.jay-box`); table head (same fill as the rows, as in the CRM) |
+| `--jay-surface-2` | `#323232` | `#F5F5F2` | Cards and raised rows inside panels |
+| `--jay-surface-3` | `#383838` | `#EAEAE6` | Hover fills, neutral chips, active nav pill |
+| `--jay-inset` | `#1F1F1F` | `#F0F0EC` | Search fields, inset buttons ("Add Subtask") |
+| `--jay-elevated` | `#2E2E2E` | `#FFFFFF` | Drawers, menus, palette |
+| `--jay-text` / `-2` / `muted` / `faint` | `#F4F4F4` / `#BDBDBD` / `#A3A3A3` / `#6E6E6E` | `#161616` / `#4D4D4D` / `#5F5F5F` / `#A3A3A3` | Text ladder |
 | `--jay-accent` | `#A7E05F` | `#A7E05F` | Lime fills: primary buttons, logo tile, active bar, accent badges |
-| `--jay-accent-text` | `#B4E878` | `#4A7A12` | Lime-family text (active tab, links, active tree item) |
+| `--jay-accent-text` | `#B4E878` | `#3E6A0C` | Lime-family text (active tab, links, active tree item) |
 | `--jay-on-accent` | `#10190A` | `#10190A` | Text on lime |
+| `--jay-danger` / `--jay-warning` | `#FF7B6E` / `#F5C542` | `#B8301F` / `#805800` | Overdue, errors / warnings (text and icons) |
 | `--jay-hue-{blue,purple,green,lime,orange,red,yellow,cyan,pink,neutral}` | light-on-dark | dark-on-light | Tags, feed icons, column markers, avatars |
 | `--jay-meter-1..4`, `--jay-meter-off` | red, orange, yellow, green | same | Segmented meter ramp |
 | `--jay-good` | `#3CCB7F` | `#1E9E5A` | Sparklines, online dots |
@@ -38,8 +39,11 @@ card titles. **Inter** (`--jay-font`) for body, tables, meta and chat prose. Bot
 `jay/extension/fonts` (OFL). Numbers use `tabular-nums`. Scale: 11 (eyebrow, uppercase +0.08em),
 12, 13 (table), 14 (body), 16, 20 (panel/page title), 24 (hero greeting).
 
-Contrast: every text/background pair in the table above is ≥ 4.5:1 except `--jay-faint`, which is
-reserved for decoration and disabled states.
+Contrast: every text token (`--jay-text`, `-2`, `muted`, `accent-text`, `danger`, `warning`) is
+≥ 4.5:1 on every surface in the table (canvas, surface, surface-2, surface-3, inset, elevated) in
+both modes. The tightest pairs are dark `muted` and `danger` on surface-3 (4.6:1) and light
+`danger` on canvas (4.8:1). `--jay-faint` is reserved for decoration and disabled states, and
+`--jay-good` is a graphic colour (sparklines, status dots), not a text colour.
 
 ## 2. Shell layout (css/jay-shell.css, js/jay-shell.js)
 
@@ -60,6 +64,10 @@ canvas (padding 12, gap 12)
   avatar + name.
 - `JAY.shell.setHeader({ title, pill: { label, hue }, crumbs: [..] })` — views call this after
   rendering to customise the header. Default: view title, no crumbs.
+- Panel widths: side tree `--jay-side-w` 264px, aside feed `--jay-aside-w` 336px. Below 1280 the
+  aside stacks under main; below 1024 the side tree hides. Tasks is the exception: it runs a
+  slimmer 244px tree so every CRM column (incl. Last update) fits at 1440, and hides it below
+  1200, where view chips and an in-page search take over.
 - Phones (< 768px): no rail, no floating canvas padding; header becomes the compact app bar;
   bottom nav (Home · Tasks · Jay · More). Panels become full-width cards with 12px gutters.
 
@@ -72,9 +80,9 @@ canvas (padding 12, gap 12)
 | `sideNav(cfg)` | `aside.jay-box.jay-side` > `.jay-side-search`, `.jay-side-section` > (`button.jay-side-head` or `.jay-side-title`) + `ul.jay-side-list` > `button.jay-side-item` (dot/icon, label, badge), `.jay-side-foot` > `.jay-btn.is-inset.is-block` | Deepsleep tree: 14px Poppins labels, chevron section heads, 8px dots, active item lime text (or lime-tinted pill), lime count badges, "+ Add New Task" inset button pinned bottom |
 | `tabs(items, opts)` | `div.jay-tabs` > `button.jay-tab` (+ `.jay-badge`) | Underline tabs: Poppins 13.5/500, muted; active = text + 2px accent underline (lime text in dark); `is-boxed` variant sits inside a panel |
 | `fpill(cfg)` | `button.jay-fpill` > `.jay-fpill-k` + `.jay-fpill-v` + chevron | CRM filter pill: 32px, radius 10, surface-2, 1px border; key muted, value text |
-| `tag(label)` / `tags(list,{max})` | `span.jay-tag.is-{hue}`, `.is-solid`, `.is-more` | Tinted pill (hue 15% fill, 30% border, hue text, radius 7, 22px); solid mini tag for cards (hue fill, dark text, 18px, radius 5); "+N" neutral |
-| `meter(pct)` | `span.jay-meter` > `.jay-meter-bars` > 14×`i` (`is-on is-b1..4`) + `.jay-meter-val` | Thin 3px bars, 12px tall, 2px gap; on bars colored by band; off bars `--jay-meter-off` |
-| `spark(values)` | `span.jay-spark` > `i` (height %) | 14 bars, 3px wide, 18px tall box, `--jay-good` (lime variant with `.is-lime`), zero days are 2px dots |
+| `tag(label)` / `tags(list,{max})` | `span.jay-tag.is-{hue}`, `.is-solid`, `.is-more` | Tinted pill (hue 15% fill, 30% border, hue text, radius 7, 22px); solid mini tag for cards (hue fill, dark text, 18px, radius 5; 17px on kanban cards); "+N" neutral. Tasks also appends a hidden `.is-more.is-collapsed` "+N" that the narrow table shows when it drops every tag but the first, so tags never vanish without a trace |
+| `meter(pct, opts)` | `span.jay-meter` > `.jay-meter-bars` > 16×`i` (`is-on is-b1..4`) + `.jay-meter-val` | 16 bars, 2px wide × 10px tall, 2px gap. The filled bars ramp red → orange → yellow → green across the filled run, so every value ends on green like the CRM; off bars `--jay-meter-off`. `ramp:false` (+ `tone`) gives one flat colour for "used" gauges such as disk space, where fuller is not better; `decorative` drops the meter role |
+| `spark(values, {hue,label})` | `span.jay-spark` > `i` (height %) | 14 bars, 3px wide, 2px gap, 14px tall box, `--jay-good` (hue variants via `.is-{hue}`); zero days are 2px dots; a negative value marks one failed run as a full-height red bar (`.is-fail`) |
 | `avatar(name,{id,size})` / `avatarStack` | `span.jay-av.is-{xs,sm,md,lg}.is-{hue}` / `span.jay-av-stack` | Colored initials circle (hue 22% fill, hue text); Jay = lime rounded-square "J"; stacks overlap −8px with 2px ring |
 | `badge(n,{accent})` | `span.jay-badge` / `.is-accent` | Neutral: surface-3 pill 20px; accent: lime square-ish (radius 5), dark text |
 | `dotPill(label,hue)` | `span.jay-dotpill.is-{hue}` | "● Active": 24px, border, hue dot |
@@ -87,12 +95,31 @@ canvas (padding 12, gap 12)
 - **Home**: `jay-layout is-fill` → Today panel (timeline) | Talk to Jay panel (dominant) |
   Attention feed panel (feed items with Approve/Decline, Done/Snooze) ; below: four bento panels
   (Projects with meters, Tasks counts, Continue, Status).
-- **Tasks**: `has-side` → side tree (Views with counts, Projects with dots + lime counts, "+ Add New
-  Task") | main panel: underline tabs (List · Board), toolbar of filter pills + Export (outline) +
-  "+ New Task" (primary), CRM-style table (checkbox, task, project & tags with +N, owner avatar +
-  name, status dot-pill, progress meter + %, activity sparkline, "calendar · date | last event",
-  due), calculation footer bar ("26 tasks in view · Σ due this week · Avg progress · + Add
-  calculation"). Board view = Deepsleep kanban (`JAY.tasks.renderBoard`).
+- **Tasks**: `has-side` → side tree, 244px (Views with counts, Projects with dots + lime counts,
+  "+ Add New Task") | main panel: underline tabs (List · Board, no count badges: the total sits in
+  the header pill, the tree and the calc bar), toolbar of filter pills (Sort by · Project · Due ·
+  Owner) + Export (outline) + "+ New Task" (primary).
+  - Table (CRM): one subtle select checkbox per row (completion lives in the row menu and the
+    drawer, not in a second control); the task title is the row header (`th scope="row"`) with
+    comment and attachment counts; project & tags as tinted chips (one chip when the first label is
+    long, otherwise two, then "+N"); owner avatar + first name; compact status (dot + label, no
+    pill box); 16-bar progress meter + %; 14-day activity sparkline; "calendar · date | last
+    event"; due. The head row uses `--jay-surface`, the same fill as the rows.
+  - Column priority follows the main panel's own width (container `jaytasks`), dropping in this
+    order: counts (< 1265px) → last update (< 1063) → owner names (< 911) → activity (< 882) →
+    extra tags, which collapse to the first tag + "+N", and the meter bars (< 800) → progress
+    (< 756) → owner (< 689) → project & tags (< 637). The panel is ≈ 1076px at 1440, so every
+    column shows there.
+  - Below 1200 the tree hides; view chips and an in-page search take over, and Export / New Task
+    move up into the tabs row. Phones show cards instead of rows.
+  - Footer: calculation bar ("22 tasks in view · Due this week · Avg progress · + Add calculation").
+  - Board view = Deepsleep kanban (`JAY.tasks.renderBoard`): one explicit track per column,
+    `grid-template-columns: repeat(var(--jay-kcols), minmax(200px, 400px))` (phones: 84vw tracks,
+    snap scrolling, a bounded height with per-column scroll). Cards carry one row of tiny solid tags
+    (one or two + "+N", no wrapping). An untagged card shows a status pill only when its status
+    differs from the column's own. Cards also carry a checklist (4 items, 2 when compact),
+    "Add Subtask", and a footer with 2 watcher avatars + "+N" and comment/attachment counts.
+    Completed cards stay readable, without strike-through; list rows keep it.
 - **Projects**: `has-side has-aside` → project tree (Favorites, Areas → projects with lime counts,
   Finished, Archive, "+ Add Project") | header panel (title, streams as `|` crumbs, icons) + tabs
   panel (Overview · Tasks · Timeline · Files · Notes, avatar stack, "+") + content (List View /

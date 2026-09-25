@@ -270,6 +270,22 @@
     initials(name) {
       return String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
     },
+    // Short relative label for feed/table time slots: "Just now", "5m ago",
+    // "3h ago", "Yesterday", "3 days ago", then the short date.
+    short(d, now) {
+      const t = new Date(d).getTime();
+      if (!Number.isFinite(t)) return '';
+      const n = (now || new Date()).getTime();
+      const diff = n - t;
+      if (diff < 60000) return 'Just now';
+      if (diff < 3600000) return Math.round(diff / 60000) + 'm ago';
+      const days = dayDiff(n, t);
+      if (days <= 0) return Math.round(diff / 3600000) + 'h ago';
+      if (days === 1) return 'Yesterday';
+      if (days < 7) return days + ' days ago';
+      return fmt.dateShort(t);
+    },
+    titleCase(s) { const x = String(s === null || s === undefined ? '' : s); return x.charAt(0).toUpperCase() + x.slice(1); },
     plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); },
     isoDate(d) {
       const x = new Date(d);
@@ -331,12 +347,133 @@
     else if (!evt.shiftKey && document.activeElement === last) { evt.preventDefault(); first.focus(); }
   }
 
-  /* ── Panel: right drawer on desktop, bottom sheet on mobile ─────────── */
   let activePanel = null;
+
+  /* ── Modal background: while a panel is open, everything behind it is inert
+        (rail, main, bottom nav, Hermes roots), so browse-mode screen readers
+        stay inside the dialog. The shell's setMode() also owns `inert` on
+        .jay-main and the Hermes roots; changes it makes while a panel is open
+        are recorded and become the value restored on close. ── */
+  const inertBg = { saved: null, mo: null };
+  function inertTargets() {
+    const out = [];
+    const app = document.getElementById('jayApp');
+    if (app) Array.from(app.children).forEach((el) => { if (el.id !== 'jayOverlays') out.push(el); });
+    ['.app-titlebar', '.layout'].forEach((sel) => { const el = document.querySelector(sel); if (el) out.push(el); });
+    const host = overlayHost();
+    return out.filter((el) => !el.contains(host));
+  }
+  function watchInert(on) {
+    if (!inertBg.mo) return;
+    if (on) inertBg.saved.forEach((_, el) => inertBg.mo.observe(el, { attributes: true, attributeFilter: ['inert'] }));
+    else inertBg.mo.disconnect();
+  }
+  function noteExternalInert(records) {
+    if (!inertBg.saved) return;
+    const reapply = [];
+    records.forEach((r) => {
+      const el = r.target;
+      if (!inertBg.saved.has(el)) return;
+      inertBg.saved.set(el, el.hasAttribute('inert'));
+      if (!el.inert) reapply.push(el);
+    });
+    if (!reapply.length) return;
+    watchInert(false);
+    reapply.forEach((el) => { el.inert = true; });
+    watchInert(true);
+  }
+  function setBackgroundInert(on) {
+    if (typeof document.querySelector !== 'function') return;
+    if (on) {
+      if (inertBg.saved) return;
+      const targets = inertTargets();
+      inertBg.saved = new Map(targets.map((el) => [el, !!el.inert]));
+      targets.forEach((el) => { el.inert = true; });
+      if (typeof MutationObserver === 'function') {
+        inertBg.mo = new MutationObserver(noteExternalInert);
+        watchInert(true);
+      }
+      return;
+    }
+    if (!inertBg.saved) return;
+    if (inertBg.mo) { noteExternalInert(inertBg.mo.takeRecords()); inertBg.mo.disconnect(); inertBg.mo = null; }
+    inertBg.saved.forEach((prev, el) => { el.inert = prev; });
+    inertBg.saved = null;
+  }
+
+  /* ── Phone sheets own one history entry, so Android Back / the iOS back
+        swipe closes the sheet instead of leaving the page. The entry keeps
+        the same URL (only history.state changes), so no hashchange fires.
+        Closing any other way removes the entry with history.back(), unless
+        the caller navigates right after closing (the usual close-then-go
+        pattern): then the entry is left behind and skipped on the way back. ── */
+  const sheetHist = { pending: null, abandoned: new Set() };
+  function canHistory() {
+    return typeof window.history === 'object' && window.history !== null && typeof window.history.pushState === 'function';
+  }
+  function histState() { try { return window.history.state; } catch (_) { return null; } }
+  function currentSheetEntry() { const s = histState(); return s && typeof s === 'object' && s.jaySheet ? s.jaySheet : null; }
+  function withSheet(id) {
+    const s = histState();
+    const next = Object.assign({}, s && typeof s === 'object' ? s : {});
+    if (id) next.jaySheet = id; else delete next.jaySheet;
+    return next;
+  }
+  function claimSheetEntry(prev) {
+    const id = nextId('sheet');
+    try {
+      const cur = currentSheetEntry();
+      const pending = sheetHist.pending;
+      if (pending && cur === pending.id) {
+        // A sheet just closed and its entry is still current: reuse it.
+        clearTimeout(pending.timer);
+        sheetHist.pending = null;
+        window.history.replaceState(withSheet(id), '');
+      } else if (prev && prev.sheetId && cur === prev.sheetId) {
+        window.history.replaceState(withSheet(id), '');
+      } else {
+        window.history.pushState(withSheet(id), '');
+      }
+      return id;
+    } catch (_) { return null; }
+  }
+  function releaseSheetEntry(id, co) {
+    if (co.fromPop) return;                                            // Back already left the entry
+    if (currentSheetEntry() !== id || co.fromNav) { sheetHist.abandoned.add(id); return; }
+    const pending = { id, timer: 0 };
+    // Deferred so a caller that closes and then sets location.hash (or opens
+    // the next sheet) in the same turn wins over our history.back().
+    pending.timer = setTimeout(() => {
+      if (sheetHist.pending === pending) sheetHist.pending = null;
+      if (currentSheetEntry() === id) { try { window.history.back(); } catch (_) { /* ignore */ } }
+      else sheetHist.abandoned.add(id);
+    }, 80);
+    sheetHist.pending = pending;
+  }
+  function onSheetPop() {
+    if (sheetHist.pending) { clearTimeout(sheetHist.pending.timer); sheetHist.pending = null; }
+    const id = currentSheetEntry();
+    if (activePanel && activePanel.sheetId && activePanel.sheetId !== id) activePanel.close({ fromPop: true });
+    if (!id || (activePanel && activePanel.sheetId === id)) return;
+    try {
+      if (sheetHist.abandoned.has(id)) { sheetHist.abandoned.delete(id); window.history.back(); }
+      else window.history.replaceState(withSheet(null), '');           // stale entry (reload, Forward): make it plain
+    } catch (_) { /* ignore */ }
+  }
+  if (canHistory() && typeof window.addEventListener === 'function') {
+    window.addEventListener('popstate', onSheetPop);
+    if (currentSheetEntry()) { try { window.history.replaceState(withSheet(null), ''); } catch (_) { /* ignore */ } }
+  }
+
+  /* ── Panel: right drawer on desktop, bottom sheet on mobile ─────────── */
+  // opts.onClose runs on user-visible closes; opts.onDispose runs exactly once on
+  // every close path (including a silent replace) — use it to dispose widgets.
+  // api.close({ fromNav: true }) tells a phone sheet that the caller navigates next.
   function openPanel(opts) {
     const o = opts || {};
-    if (activePanel) activePanel.close({ silent: true });
-    const returnFocus = document.activeElement;
+    const prev = activePanel;
+    if (prev) prev.close({ silent: true, replace: true });
+    const returnFocus = prev && prev.returnFocus && prev.returnFocus.isConnected ? prev.returnFocus : document.activeElement;
     const titleId = nextId('jay-panel-title');
     const mobile = isMobile();
     const closeBtn = h('button', { type: 'button', class: 'jay-icon-btn', 'aria-label': 'Close', onclick: () => api.close() }, icon('x', 18));
@@ -358,13 +495,29 @@
     const wrap = h('div', { class: ['jay-panel-wrap', o.placement === 'center' && !mobile ? 'is-center' : ''] }, scrim, panel);
     overlayHost().appendChild(wrap);
     document.documentElement.classList.add('jay-panel-open');
+    setBackgroundInert(true);
     requestAnimationFrame(() => wrap.classList.add('is-open'));
+    const sheetId = mobile && canHistory() ? claimSheetEntry(prev) : null;
+    if (!sheetId && prev && prev.sheetId) releaseSheetEntry(prev.sheetId, {});
 
     function onKey(e) {
       if (e.key === 'Escape') { e.stopPropagation(); api.close(); return; }
       trapFocus(panel, e);
     }
     panel.addEventListener('keydown', onKey);
+    // Focus can fall out of the panel (a focused control removed by an action,
+    // a toast button). Esc still closes it and Tab brings focus back inside.
+    function onDocKey(e) {
+      if (activePanel !== api || activeMenu || e.defaultPrevented) return;
+      if (e.target instanceof Node && panel.contains(e.target)) return;
+      if (e.key === 'Escape') { api.close(); return; }
+      if (e.key === 'Tab') {
+        const items = focusables(panel);
+        e.preventDefault();
+        (items.length ? (e.shiftKey ? items[items.length - 1] : items[0]) : panel).focus();
+      }
+    }
+    document.addEventListener('keydown', onDocKey);
 
     // Swipe-down to dismiss on the mobile sheet grabber/header.
     if (mobile) {
@@ -388,18 +541,31 @@
       });
     }
 
+    let closed = false;
     const api = {
       el: panel,
       body,
+      sheetId,
+      returnFocus,
+      // closeOpts: { silent } skips focus return and onClose; { fromNav } = the
+      // caller navigates next; { fromPop } = Back already left the sheet entry.
       close(closeOpts) {
-        if (!wrap.isConnected) return;
+        if (closed || !wrap.isConnected) return;
+        closed = true;
+        const co = closeOpts || {};
         wrap.classList.remove('is-open');
         panel.removeEventListener('keydown', onKey);
+        document.removeEventListener('keydown', onDocKey);
         const done = () => { wrap.remove(); };
         if (mqReducedMotion.matches) done(); else setTimeout(done, 200);
         if (activePanel === api) activePanel = null;
         if (!activePanel) document.documentElement.classList.remove('jay-panel-open');
-        if (!(closeOpts && closeOpts.silent)) {
+        if (sheetId && !co.replace) releaseSheetEntry(sheetId, co);
+        // A replacing panel keeps the background inert; everything else restores
+        // it before focus goes back to the page.
+        if (!co.replace && !activePanel) setBackgroundInert(false);
+        if (typeof o.onDispose === 'function') { try { o.onDispose(); } catch (err) { console.warn('[jay] panel dispose failed', err); } }
+        if (!co.silent) {
           if (returnFocus && returnFocus.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus();
           if (typeof o.onClose === 'function') o.onClose();
         }
@@ -417,14 +583,25 @@
 
   /* ── Popover menu ───────────────────────────────────────────────────── */
   let activeMenu = null;
+  // items: [{ label, icon, hint, tone, active, run } | '-']. An item whose
+  // `active` is a boolean is a choice (sort/filter value): it is exposed as
+  // menuitemradio with aria-checked, so the current value is announced.
   function menu(anchor, items, opts) {
     closeMenu();
     const o = opts || {};
     const list = h('div', { class: 'jay-menu', role: 'menu', 'aria-label': o.label || 'Options' },
       items.filter(Boolean).map((it) => it === '-' ? h('div', { class: 'jay-menu-sep', role: 'separator' }) :
         h('button', {
-          type: 'button', role: 'menuitem', class: ['jay-menu-item', it.tone ? 'is-' + it.tone : '', it.active ? 'is-active' : ''],
-          onclick: () => { closeMenu(); it.run && it.run(); },
+          type: 'button', role: typeof it.active === 'boolean' ? 'menuitemradio' : 'menuitem',
+          'aria-checked': typeof it.active === 'boolean' ? String(it.active) : null,
+          class: ['jay-menu-item', it.tone ? 'is-' + it.tone : '', it.active ? 'is-active' : ''],
+          onclick: () => {
+            closeMenu();
+            // The focused item is gone; park focus on the trigger before the
+            // action runs so an open drawer keeps focus (and Esc) inside it.
+            if (anchor && anchor.isConnected && typeof anchor.focus === 'function') anchor.focus({ preventScroll: true });
+            if (it.run) it.run();
+          },
         }, it.icon ? icon(it.icon, 16) : null, h('span', null, it.label), it.hint ? h('span', { class: 'jay-menu-hint' }, it.hint) : null)));
     overlayHost().appendChild(list);
     const r = anchor.getBoundingClientRect();
@@ -438,19 +615,27 @@
     list.style.minWidth = mw + 'px';
     const first = list.querySelector('.jay-menu-item');
     if (first) first.focus();
-    function onDoc(e) { if (!list.contains(e.target) && e.target !== anchor) closeMenu(); }
+    const handle = { el: list, cleanup() { document.removeEventListener('pointerdown', onDoc, true); } };
+    function onDoc(e) {
+      if (activeMenu !== handle) return;
+      if (!list.contains(e.target) && e.target !== anchor) closeMenu();
+    }
     function onKey(e) {
       const btns = Array.from(list.querySelectorAll('.jay-menu-item'));
       const i = btns.indexOf(document.activeElement);
       if (e.key === 'Escape') { e.preventDefault(); closeMenu(); anchor.focus(); }
       else if (e.key === 'ArrowDown') { e.preventDefault(); (btns[i + 1] || btns[0]).focus(); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); (btns[i - 1] || btns[btns.length - 1]).focus(); }
+      else if (e.key === 'Home') { e.preventDefault(); if (btns[0]) btns[0].focus(); }
+      else if (e.key === 'End') { e.preventDefault(); if (btns.length) btns[btns.length - 1].focus(); }
       else if (e.key === 'Tab') { closeMenu(); }
     }
-    setTimeout(() => document.addEventListener('pointerdown', onDoc, true), 0);
+    activeMenu = handle;
+    // Deferred so the click that opened the menu doesn't close it — but only
+    // attached if this menu is still the open one when the timer fires.
+    setTimeout(() => { if (activeMenu === handle) document.addEventListener('pointerdown', onDoc, true); }, 0);
     list.addEventListener('keydown', onKey);
-    activeMenu = { el: list, cleanup() { document.removeEventListener('pointerdown', onDoc, true); } };
-    return activeMenu;
+    return handle;
   }
   function closeMenu() {
     if (!activeMenu) return;
@@ -487,12 +672,15 @@
   function widget(container, cfg) {
     let disposed = false;
     let seq = 0;
+    let wasConnected = false;
     async function refresh(opts) {
       const my = ++seq;
+      if (container.isConnected) wasConnected = true;
       if (!(opts && opts.quiet) || !container.firstChild) mount(container, state('loading', { rows: cfg.skeletonRows || 3 }));
       try {
         const data = await cfg.load();
         if (disposed || my !== seq) return;
+        if (container.isConnected) wasConnected = true;
         if (data && data.__state) {
           if (cfg.quietStates) { clear(container); return; }
           mount(container, state(data.__state, cfg.states && cfg.states[data.__state]));
@@ -503,34 +691,50 @@
         mount(container, cfg.render(data));
       } catch (err) {
         if (disposed || my !== seq) return;
+        if (container.isConnected) wasConnected = true;
         console.warn('[jay] widget failed:', cfg.name || '', err);
         mount(container, state('error', Object.assign({
           action: { label: 'Retry', icon: 'refresh', run: () => refresh() },
         }, cfg.error || {})));
       }
     }
-    const offs = (cfg.domains || []).map((d) => on('data:' + d, () => refresh({ quiet: true })));
+    function dispose() { disposed = true; offs.forEach((off) => off()); }
+    // Safety net: a widget whose container was on the page and has since been
+    // removed (its view or sheet is gone) stops listening instead of rendering
+    // into a detached node forever.
+    function onData() {
+      if (disposed) return;
+      if (wasConnected && !container.isConnected) { dispose(); return; }
+      refresh({ quiet: true });
+    }
+    const offs = (cfg.domains || []).map((d) => on('data:' + d, onData));
     refresh();
-    return {
-      refresh,
-      dispose() { disposed = true; offs.forEach((off) => off()); },
-    };
+    return { refresh, dispose };
   }
 
   /* ── Shared visual components (v2). Markup is defined here once so every
         screen renders identical structures; styling lives in jay-components.css. ── */
   const HUES = ['blue', 'purple', 'green', 'orange', 'red', 'yellow', 'cyan', 'pink', 'lime', 'neutral'];
+  // Chosen so a tag never shares its hue with the project tag beside it
+  // (project tones: lime, blue, orange, yellow, purple — see toneHue()).
   const TAG_HUE = {
     client: 'blue', enterprise: 'blue', work: 'blue',
-    proposal: 'purple', voice: 'purple', upsell: 'purple',
-    content: 'green', health: 'green', renewal: 'green', personal: 'green',
-    design: 'orange', suppliers: 'orange', pilot: 'orange',
+    proposal: 'purple', voice: 'purple', upsell: 'purple', content: 'purple',
+    health: 'green', renewal: 'green', personal: 'green', finance: 'green',
+    design: 'orange', pilot: 'orange',
     urgent: 'red', blocked: 'red', strategic: 'red',
-    finance: 'yellow', bills: 'yellow', business: 'yellow',
-    ops: 'cyan', infra: 'cyan',
-    research: 'pink',
+    business: 'yellow', ops: 'yellow',
+    suppliers: 'cyan', infra: 'cyan',
+    research: 'pink', bills: 'pink',
     errands: 'neutral', admin: 'neutral',
   };
+  // Project tone (1–5) → contrast-safe hue for text tags. Tones themselves
+  // (--jay-tone-N) stay for dots and tiles. Accepts a tone or a project.
+  const TONE_HUE = { 1: 'lime', 2: 'blue', 3: 'orange', 4: 'yellow', 5: 'purple' };
+  function toneHue(x) {
+    const t = x && typeof x === 'object' ? x.tone : x;
+    return TONE_HUE[Math.round(Number(t))] || 'neutral';
+  }
   function hashHue(str, list) {
     let x = 0;
     const s = String(str || '');
@@ -556,27 +760,45 @@
     return h('span', { class: 'jay-tags' }, shown);
   }
 
-  // Segmented meter: n thin bars ramping red → orange → yellow → green, filled up to pct.
+  // Segmented meter (CRM "Win Probability"): thin bars filled up to pct. The
+  // filled bars ramp red → orange → yellow → green across the filled run, so
+  // every value ends on green like the reference.
+  // opts: { segments=16, showValue=true, label, ramp=true, tone, decorative }
+  //   ramp:false → one flat colour (neutral, or tone: 'good'|'warning'|'danger'|'accent'),
+  //                for "used" gauges such as disk space where fuller is not better.
+  //   decorative → aria-hidden, no meter role (e.g. inside a button that says the value).
+  const METER_TONES = ['good', 'warning', 'danger', 'accent'];
   function meter(pct, opts) {
-    const o = Object.assign({ segments: 14, showValue: true }, opts || {});
+    const o = Object.assign({ segments: 16, showValue: true, ramp: true }, opts || {});
+    const n = Math.max(1, Math.min(60, Math.round(Number(o.segments) || 16)));
     const v = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
-    const on = Math.round((v / 100) * o.segments);
+    const on = Math.round((v / 100) * n);
+    const flat = o.ramp === false;
     const bars = h('span', { class: 'jay-meter-bars', 'aria-hidden': 'true' });
-    for (let i = 0; i < o.segments; i += 1) {
-      const band = 1 + Math.min(3, Math.floor((i / o.segments) * 4));
-      bars.appendChild(h('i', { class: i < on ? 'is-on is-b' + band : '' }));
+    for (let i = 0; i < n; i += 1) {
+      let cls = '';
+      if (i < on) cls = flat ? 'is-on' : 'is-on is-b' + (on <= 1 ? 1 : 1 + Math.round((i / (on - 1)) * 3));
+      bars.appendChild(h('i', { class: cls }));
     }
-    return h('span', { class: 'jay-meter', role: 'meter', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(v), 'aria-label': (o.label || 'Progress') + ' ' + v + '%' },
+    const a11y = o.decorative ? { 'aria-hidden': 'true' }
+      : { role: 'meter', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(v), 'aria-label': (o.label || 'Progress') + ' ' + v + '%' };
+    return h('span', Object.assign({ class: ['jay-meter', flat ? 'is-flat' : '', flat && METER_TONES.includes(o.tone) ? 'is-' + o.tone : ''] }, a11y),
       bars, o.showValue ? h('span', { class: 'jay-meter-val' }, v + '%') : null);
   }
 
-  // Mini bar sparkline (activity trend). Values are relative; empty days render as a dot.
+  // Mini bar sparkline (activity trend). Values are relative; empty days render
+  // as a dot. A negative value marks a failed run: a full-height red bar.
   function spark(values, opts) {
     const o = opts || {};
-    const vals = (values || []).map((n) => Math.max(0, Number(n) || 0));
-    const max = Math.max(1, ...vals);
+    const vals = (values || []).map((n) => Number(n) || 0);
+    const max = Math.max(1, ...vals.map((n) => Math.abs(n)));
+    const bar = (n) => {
+      if (n < 0) return h('i', { class: 'is-fail', style: { height: '100%' } });
+      if (!n) return h('i', { class: 'is-zero', style: { height: '12%' } });
+      return h('i', { style: { height: Math.max(18, Math.round((n / max) * 100)) + '%' } });
+    };
     return h('span', { class: ['jay-spark', o.hue ? 'is-' + o.hue : ''], role: 'img', 'aria-label': o.label || ('Activity, last ' + vals.length + ' days') },
-      vals.map((n) => h('i', { class: n ? '' : 'is-zero', style: { height: (n ? Math.max(18, Math.round((n / max) * 100)) : 12) + '%' } })));
+      vals.map(bar));
   }
 
   // Colored initials avatar; Jay gets the lime monogram tile.
@@ -609,32 +831,101 @@
   // "● Active" status pill.
   function dotPill(label, hue) { return h('span', { class: ['jay-dotpill', 'is-' + (hue || 'green')] }, h('i', { 'aria-hidden': 'true' }), label); }
 
-  // Underline tabs with optional badges. items: [{ id, label, badge, disabled }]
+  // Underline tabs with optional badges. items: [{ id, label, icon, badge, badgeAccent, disabled }]
+  // opts: { active, label, variant, onSelect, panel | panelId }. With a panel
+  // (element or id) every tab gets aria-controls, and the panel gets
+  // role=tabpanel + aria-labelledby of the active tab. Call wrap.bindPanel(el)
+  // when the panel is created after the tabs.
   function tabs(items, opts) {
-    const o = opts || {};
+    const o = Object.assign({}, opts || {});
+    const baseId = nextId('jay-tabs');
+    const tabId = (id) => baseId + '-' + String(id).replace(/[^A-Za-z0-9_-]/g, '_');
+    let current = null;
     const wrap = h('div', { class: ['jay-tabs', o.variant ? 'is-' + o.variant : ''], role: 'tablist', 'aria-label': o.label || 'Views' });
+    function panelEl() {
+      const p = o.panel || (o.panelId ? document.getElementById(o.panelId) : null);
+      if (p && !p.id) p.id = baseId + '-panel';
+      return p;
+    }
     function sync(active) {
+      current = active;
+      const p = panelEl();
       wrap.querySelectorAll('.jay-tab').forEach((b) => {
         const on = b.dataset.tab === active;
         b.classList.toggle('is-active', on);
         b.setAttribute('aria-selected', on ? 'true' : 'false');
         b.tabIndex = on ? 0 : -1;
+        const ctl = p ? p.id : o.panelId;
+        if (ctl) b.setAttribute('aria-controls', ctl);
       });
+      if (p) {
+        if (!p.getAttribute('role')) p.setAttribute('role', 'tabpanel');
+        if (active !== null && active !== undefined) p.setAttribute('aria-labelledby', tabId(active));
+      }
     }
     items.forEach((it) => wrap.appendChild(h('button', {
-      type: 'button', role: 'tab', class: 'jay-tab', 'data-tab': it.id, disabled: it.disabled || null,
+      type: 'button', role: 'tab', class: 'jay-tab', id: tabId(it.id), 'data-tab': it.id, disabled: it.disabled || null,
       onclick: () => { sync(it.id); if (o.onSelect) o.onSelect(it.id); },
     }, it.icon ? icon(it.icon, 15) : null, h('span', null, it.label), it.badge !== undefined && it.badge !== null ? badge(it.badge, { accent: it.badgeAccent !== false }) : null)));
     wrap.addEventListener('keydown', (e) => {
-      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
       const btns = Array.from(wrap.querySelectorAll('.jay-tab:not([disabled])'));
+      if (!btns.length) return;
       const i = btns.indexOf(document.activeElement);
-      const next = btns[(i + (e.key === 'ArrowRight' ? 1 : -1) + btns.length) % btns.length];
+      let next;
+      if (e.key === 'Home') next = btns[0];
+      else if (e.key === 'End') next = btns[btns.length - 1];
+      else next = btns[(i + (e.key === 'ArrowRight' ? 1 : -1) + btns.length) % btns.length];
       if (next) { e.preventDefault(); next.focus(); next.click(); }
     });
     sync(o.active || (items[0] && items[0].id));
     wrap.sync = sync;
+    wrap.tabId = tabId;
+    wrap.bindPanel = (el) => { o.panel = el || null; sync(current); return el; };
     return wrap;
+  }
+
+  // Segmented control as an APG radio group: one tab stop (the checked radio),
+  // Arrow keys move and select (wrapping), Home/End jump, Space/Enter select.
+  // options: [[value, label, icon?]] or [{ value, label, icon }].
+  // opts: { full } stretches the buttons. Returns the group element with
+  // setValue(v) (repaint without calling onPick) and getValue().
+  function segmented(options, value, onPick, label, opts) {
+    const o = opts || {};
+    const list = (options || []).filter(Boolean).map((op) => (Array.isArray(op) ? { value: op[0], label: op[1], icon: op[2] } : op));
+    let current = value;
+    const group = h('div', { class: ['jay-segmented', o.full ? 'is-full' : ''], role: 'radiogroup', 'aria-label': label || null });
+    const btns = list.map((op) => h('button', {
+      type: 'button', role: 'radio', 'data-value': String(op.value),
+      onclick: () => pick(op.value),
+    }, op.icon ? icon(op.icon, 15) : null, op.label));
+    btns.forEach((b) => group.appendChild(b));
+    function paint() {
+      const idx = list.findIndex((op) => op.value === current);
+      btns.forEach((b, i) => {
+        const on = i === idx;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-checked', on ? 'true' : 'false');
+        b.tabIndex = on || (idx < 0 && i === 0) ? 0 : -1;
+      });
+    }
+    function pick(v) { current = v; paint(); if (typeof onPick === 'function') onPick(v); }
+    group.addEventListener('keydown', (e) => {
+      const keys = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'];
+      if (!keys.includes(e.key) || !btns.length) return;
+      const i = btns.indexOf(document.activeElement);
+      let j;
+      if (e.key === 'Home') j = 0;
+      else if (e.key === 'End') j = btns.length - 1;
+      else j = (Math.max(0, i) + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + btns.length) % btns.length;
+      e.preventDefault();
+      btns[j].focus();
+      if (list[j].value !== current) pick(list[j].value);
+    });
+    paint();
+    group.setValue = (v) => { current = v; paint(); };
+    group.getValue = () => current;
+    return group;
   }
 
   // Filter pill: "Sort by  Due date ⌄" (key muted, value strong).
@@ -648,12 +939,38 @@
     return btn;
   }
 
-  // Short file-type label for the attachment badge ("PDF", "XLS", …).
-  const FILE_BADGE = { sheet: 'XLS', xlsx: 'XLS', docx: 'DOC', image: 'IMG', jpeg: 'JPG', file: 'FILE' };
-  function fileBadgeLabel(att) {
-    if (att.badge) return String(att.badge).slice(0, 4).toUpperCase();
-    const kind = String(att.kind || 'file').toLowerCase();
-    return FILE_BADGE[kind] || kind.slice(0, 3).toUpperCase();
+  // File-type badge for attachments ("PDF", "XLS", …). att: { kind, badge, name }.
+  // opts.fromName derives the type from the file name's extension first
+  // (project file lists); otherwise `kind` decides. One label table for all screens.
+  const FILE_BADGE = { sheet: 'XLS', xlsx: 'XLS', docx: 'DOC', image: 'IMG', jpeg: 'JPG', markdown: 'MD', file: 'FILE' };
+  const cssToken = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9-]/g, '');
+  function fileExt(name) {
+    const m = /\.([a-z0-9]+)$/i.exec(String(name || ''));
+    return m ? m[1].toLowerCase() : '';
+  }
+  function fileBadgeLabel(att, opts) {
+    const a = att || {};
+    if (a.badge) return String(a.badge).slice(0, 4).toUpperCase();
+    const key = (opts && opts.fromName && fileExt(a.name)) || cssToken(a.kind) || 'file';
+    return FILE_BADGE[key] || key.slice(0, 3).toUpperCase();
+  }
+  function fileBadge(att, opts) {
+    const a = att || {};
+    const ext = opts && opts.fromName ? cssToken(fileExt(a.name)) : '';
+    const kind = cssToken(a.kind) || 'file';
+    return h('span', { class: ['jay-file-badge', ext && ext !== kind ? 'is-' + ext : '', 'is-' + kind], 'aria-hidden': 'true' }, fileBadgeLabel(a, opts));
+  }
+
+  // CRM calendar cell: "▢ Oct 2 | Homepage copy review". d is a date; opts.text
+  // replaces the formatted date (e.g. a schedule), opts.title adds a tooltip.
+  function dateCell(d, label, opts) {
+    const o = opts || {};
+    const text = o.text !== undefined && o.text !== null ? String(o.text) : fmt.dateShort(d);
+    return h('span', { class: 'jay-date-cell', title: o.title || null },
+      icon('calendar', 13),
+      h('span', { class: 'jay-date-cell-d' }, text),
+      label ? h('span', { class: 'jay-sep', 'aria-hidden': 'true' }, '|') : null,
+      label ? h('span', { class: 'jay-date-cell-l' }, label) : null);
   }
 
   // Activity feed item (Deepsleep-style). cfg: { who: {id,name} | null, icon, hue, verb, target, onTarget,
@@ -668,7 +985,7 @@
       ? h('button', { type: 'button', class: 'jay-feed-target', onclick: cfg.onTarget }, cfg.target)
       : h('span', { class: 'jay-feed-target' }, cfg.target)) : null;
     const att = cfg.attachment ? h('div', { class: 'jay-feed-att' },
-      h('span', { class: ['jay-file-badge', 'is-' + (cfg.attachment.kind || 'file')], 'aria-hidden': 'true' }, fileBadgeLabel(cfg.attachment)),
+      fileBadge(cfg.attachment),
       h('span', { class: 'jay-feed-att-main' }, h('span', { class: 'jay-feed-att-name' }, cfg.attachment.name), cfg.attachment.meta ? h('span', { class: 'jay-feed-att-meta' }, cfg.attachment.meta) : null)) : null;
     const quote = cfg.quote ? h('div', { class: 'jay-feed-quote' }, cfg.quote) : null;
     const actions = cfg.actions && cfg.actions.length ? h('div', { class: 'jay-feed-actions' }, cfg.actions.map((a) => h('button', {
@@ -684,7 +1001,7 @@
   }
 
   // Contextual tree navigation panel (Deepsleep-style second column).
-  // cfg: { label, search: {placeholder, onInput}, sections: [{ id, title, open, collapsible,
+  // cfg: { label, navLabel, search: {placeholder, onInput}, sections: [{ id, title, open, collapsible,
   //        items: [{ id, label, icon, dot (hue), count, countAccent, active, depth, run }] }], footer: {label, icon, run} }
   function sideNav(cfg) {
     const aside = h('aside', { class: 'jay-box jay-side', 'aria-label': cfg.label || 'Navigation' });
@@ -694,7 +1011,8 @@
       if (cfg.search.onInput) input.addEventListener('input', () => cfg.search.onInput(input.value));
       aside.appendChild(h('div', { class: 'jay-side-search jay-search' }, icon('search', 15), input));
     }
-    const scroll = h('nav', { class: 'jay-side-scroll' });
+    // The tree is a second navigation landmark next to the rail, so it is named.
+    const scroll = h('nav', { class: 'jay-side-scroll', 'aria-label': cfg.navLabel || cfg.label || 'Sections' });
     (cfg.sections || []).forEach((sec) => {
       const listId = nextId('side-list');
       const list = h('ul', { class: 'jay-side-list', id: listId }, (sec.items || []).map((it) => h('li', null, h('button', {
@@ -728,11 +1046,18 @@
     return h('section', a, ...children);
   }
 
+  // Public API. Shared-component helpers screens rely on (names are stable):
+  //   ui.toneHue(toneOrProject) → contrast-safe hue name for a project tone (1–5)
+  //   ui.tabs(items, opts)      → tablist; .sync(id), .tabId(id), .bindPanel(el) (wire a later-built tabpanel)
+  //   ui.segmented(options, value, onPick, label, opts) → APG radio group; .setValue(v), .getValue()
+  //   ui.fileBadge(att, { fromName }) → "PDF"/"XLS"… type badge (decorative)
+  //   ui.dateCell(date, label, { text, title }) → CRM "▢ Sep 18 | label" cell
   Object.assign(JAY, {
     h, mount, clear, append, icon, ICONS, on, emit, storage, fmt, isMobile, mqMobile, mqReducedMotion, nextId,
     ui: {
       toast, openPanel, closePanel, hasOpenPanel, menu, closeMenu, state, trapFocus,
-      tag, tags, tagHue, hashHue, meter, spark, avatar, avatarStack, badge, dotPill, tabs, fpill, feedItem, sideNav, box,
+      tag, tags, tagHue, hashHue, toneHue, meter, spark, avatar, avatarStack, badge, dotPill, tabs, segmented, fpill,
+      fileBadge, dateCell, feedItem, sideNav, box,
     },
     widget,
   });

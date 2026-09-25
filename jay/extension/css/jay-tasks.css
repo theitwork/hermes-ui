@@ -15,13 +15,19 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  border: 1.5px solid color-mix(in srgb, var(--jay-text) 30%, transparent);
+  border: 1.5px solid var(--jay-cb-edge);
   color: var(--jay-on-accent);
   flex-shrink: 0;
   transition: border-color var(--jay-dur) var(--jay-ease), background var(--jay-dur) var(--jay-ease);
 }
+/* The border is the only cue of an unchecked box, so it keeps ≥ 3:1 against
+   the row: 50% text in light (≈ 3.45:1 on white), 40% in dark (≈ 3.4:1 on the
+   dark panel surface) — still the faint CRM look. */
+.jay-check, .jay-tcb { --jay-cb-edge: color-mix(in srgb, var(--jay-text) 50%, transparent); }
+:root.dark :is(.jay-check, .jay-tcb) { --jay-cb-edge: color-mix(in srgb, var(--jay-text) 40%, transparent); }
 .jay-check > .jay-icon { opacity: 0; stroke-width: 3; transition: opacity var(--jay-dur) var(--jay-ease); }
 .jay-check:hover { border-color: var(--jay-accent); background: var(--jay-accent-softer); }
+:root:not(.dark) .jay-check:hover { border-color: var(--jay-accent-text); }
 .jay-check:hover > .jay-icon { opacity: 0.55; color: var(--jay-accent-text); }
 .jay-check.is-done { background: var(--jay-accent); border-color: var(--jay-accent); }
 .jay-check.is-done > .jay-icon { opacity: 1; color: var(--jay-on-accent); }
@@ -32,6 +38,13 @@
 .jay-due.is-today { color: var(--jay-accent-text); font-weight: 600; }
 .jay-due.is-later, .jay-due.is-none, .jay-due.is-done { color: var(--jay-muted); }
 .jay-proj-tag { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--jay-text-2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Project tone dot: the tone (1–5) only picks a class, never an inline style. */
+.jay-tone-dot { --jay-h: var(--jay-hue-neutral); width: 8px; height: 8px; border-radius: 2.5px; background: var(--jay-h); flex-shrink: 0; }
+.jay-tone-dot.is-tone-1 { --jay-h: var(--jay-tone-1); }
+.jay-tone-dot.is-tone-2 { --jay-h: var(--jay-tone-2); }
+.jay-tone-dot.is-tone-3 { --jay-h: var(--jay-tone-3); }
+.jay-tone-dot.is-tone-4 { --jay-h: var(--jay-tone-4); }
+.jay-tone-dot.is-tone-5 { --jay-h: var(--jay-tone-5); }
 .jay-prio-wrap { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--jay-text-2); }
 .jay-prio { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
 .jay-prio i { width: 3px; border-radius: 1px; background: var(--jay-meter-off); }
@@ -74,7 +87,7 @@
   height: 16px;
   margin: 0;
   border-radius: 4px;
-  border: 1.5px solid color-mix(in srgb, var(--jay-text) 30%, transparent);
+  border: 1.5px solid var(--jay-cb-edge);
   background: transparent;
   cursor: pointer;
   vertical-align: middle;
@@ -91,13 +104,19 @@
   opacity: 0;
 }
 .jay-tcb:hover { border-color: var(--jay-accent); }
+:root:not(.dark) .jay-tcb:hover { border-color: var(--jay-accent-text); }
 .jay-tcb:checked, .jay-tcb:indeterminate { background: var(--jay-accent); border-color: var(--jay-accent); }
 .jay-tcb:checked::before { opacity: 1; }
 .jay-tcb:indeterminate::before { opacity: 1; height: 0; border-left: 0; transform: none; }
 .jay-tcb:focus-visible { outline: 2px solid var(--jay-accent); outline-offset: 2px; }
 :root:not(.dark) .jay-tcb:focus-visible { outline-color: var(--jay-accent-text); }
 
-/* ── Layout: side tree | main panel ── */
+/* ── Layout: side tree | main panel ──
+   Tasks runs a slimmer tree (244px: just wide enough for "Business Operations
+   6") so the CRM's key columns, incl. Last update, fit at 1440. Below 1200 the
+   tree hands over to the view chips (see the responsive section) so the table
+   keeps its signature cells at tablet widths. */
+.jay-layout.jay-tasks.has-side { grid-template-columns: 244px minmax(0, 1fr); }
 .jay-tasks > .jay-side .jay-side-item[data-side^="view:"] .jay-side-icon { width: 16px; }
 .jay-tmain {
   display: flex;
@@ -108,16 +127,15 @@
 }
 .jay-tmain > * { flex-shrink: 0; }
 
-/* Tabs row (List · Board) */
+/* Tabs row (List · Board). No counts on the tabs: the total already sits in the
+   header pill, the side tree and the calc bar (the CRM tabs carry none). */
 .jay-ttabs { display: flex; align-items: stretch; gap: 12px; min-width: 0; padding: 4px 20px 0; box-shadow: inset 0 -1px 0 var(--jay-border); }
 .jay-ttabs > .jay-tabs { box-shadow: none; gap: 26px; }
 .jay-ttabs .jay-tab { height: 50px; }
 .jay-ttabs .jay-tab::after { left: -6px; right: -6px; }
-.jay-ttabs .jay-tab > .jay-badge[hidden] { display: none; }
-.jay-ttabs .jay-tab > .jay-badge:not(.is-accent) { background: var(--jay-surface-3); color: var(--jay-text-2); border-radius: 5px; }
 .jay-tclear { align-self: center; gap: 5px; color: var(--jay-text-2); }
 .jay-tclear:hover { color: var(--jay-text); }
-.jay-tnew-sm, .jay-texport-sm { display: none; align-self: center; }
+.jay-tnew-sm, .jay-texport-sm, .jay-tsearch-toggle { display: none; align-self: center; }
 .jay-ttabs > .jay-btn.is-sm { height: 32px; border-radius: var(--jay-r-md); }
 .jay-texport-sm { width: 32px; border-color: var(--jay-border-strong); background: var(--jay-surface-2); color: var(--jay-text-2); }
 
@@ -154,8 +172,10 @@
 .jay-bulkbar .jay-btn.is-sm { height: 32px; border-radius: var(--jay-r-md); }
 .jay-bulkbar .jay-btn.is-outline { background: var(--jay-surface); border-color: var(--jay-border-strong); }
 
-/* View chips (shown when the side tree is hidden: tablets and phones) */
-.jay-tchips { display: none; gap: 6px; padding: 12px 20px 0; }
+/* View chips row (shown when the side tree is hidden: < 1200 and phones).
+   Phones also get the "Filter · Sort" pill at its start. */
+.jay-tchips-row { display: none; align-items: center; gap: 6px; min-width: 0; padding: 12px 20px 0; }
+.jay-tchips { display: flex; flex: 1 1 auto; gap: 6px; min-width: 0; }
 .jay-tchip {
   display: inline-flex;
   align-items: center;
@@ -178,6 +198,11 @@
 .jay-tchip.is-alert .jay-tchip-n { color: var(--jay-danger); }
 .jay-tchip.is-active { background: var(--jay-accent); border-color: transparent; color: var(--jay-on-accent); }
 .jay-tchip.is-active .jay-tchip-n { color: var(--jay-on-accent); opacity: 0.75; }
+.jay-tfilter { display: none; flex-shrink: 0; gap: 7px; }
+.jay-tfilter > .jay-icon { color: var(--jay-text-2); }
+.jay-tfilter > .jay-fpill-v { font-weight: 500; }
+.jay-tfilter > .jay-badge[hidden] { display: none; }
+.jay-tfilter-form .jay-tprops { gap: 8px; }
 
 /* Scroll body (table / board) */
 .jay-tbody { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
@@ -185,7 +210,10 @@
 .jay-tbody.is-busy > :not(.jay-state) { opacity: 0.55; transition: opacity var(--jay-dur) var(--jay-ease) 120ms; }
 .jay-tbody > .jay-skeleton { padding: 20px; }
 
-/* ── CRM table ── */
+/* ── CRM table ──
+   Density follows the CRM (≈35px rows at 12.5px text): 38px rows, 36px head,
+   20px tags, 7px cell padding. The task title is the row header (th scope=row),
+   so every cell rule covers `tbody th` too. */
 .jay-ttable {
   width: 100%;
   border-collapse: separate;
@@ -194,12 +222,12 @@
   font-size: 13px;
   color: var(--jay-text);
 }
-.jay-ttable th {
+.jay-ttable thead th {
   position: sticky;
   top: 0;
   z-index: 2;
-  height: 40px;
-  padding: 0 8px;
+  height: 36px;
+  padding: 0 7px;
   background: var(--jay-surface);
   border-bottom: 1px solid var(--jay-border);
   text-align: left;
@@ -214,24 +242,24 @@
 .jay-th-btn:hover > .jay-icon, .jay-th-btn:focus-visible > .jay-icon { opacity: 0.8; }
 .jay-th-btn.is-active { color: var(--jay-text); }
 .jay-th-btn.is-active > .jay-icon { opacity: 1; color: var(--jay-accent-text); }
-.jay-ttable td {
-  height: 44px;
-  padding: 0 8px;
+.jay-ttable :is(td, tbody th) {
+  height: 38px;
+  padding: 0 7px;
   border-bottom: 1px solid var(--jay-border);
   vertical-align: middle;
   white-space: nowrap;
   transition: background var(--jay-dur) var(--jay-ease);
 }
-.jay-ttable td > * { vertical-align: middle; }
-.jay-ttable tbody tr:last-child td { border-bottom-color: transparent; }
+.jay-ttable tbody th { font: inherit; font-weight: inherit; text-align: left; color: inherit; }
+.jay-ttable :is(td, tbody th) > * { vertical-align: middle; }
+.jay-ttable tbody tr:last-child > :is(td, th) { border-bottom-color: transparent; }
 .jay-tr { cursor: pointer; }
-.jay-tr:hover > td { background: var(--jay-hover); }
+.jay-tr:hover > :is(td, th) { background: var(--jay-hover); }
 .jay-ttable td.c-sel { cursor: default; }
-.jay-tr.is-selected > td { background: color-mix(in srgb, var(--jay-surface-2) 80%, var(--jay-accent) 3%); }
-:root:not(.dark) .jay-tr.is-selected > td { background: var(--jay-accent-softer); }
-.jay-ttable .c-sel { width: 16px; padding: 0 4px 0 20px; }
-.jay-ttable .c-done { width: 18px; padding: 0 4px 0 8px; }
-.jay-ttable .c-more { width: 28px; padding: 0 12px 0 2px; text-align: right; }
+.jay-tr.is-selected > :is(td, th) { background: color-mix(in srgb, var(--jay-surface-2) 80%, var(--jay-accent) 3%); }
+:root:not(.dark) .jay-tr.is-selected > :is(td, th) { background: var(--jay-accent-softer); }
+.jay-ttable .c-sel { width: 16px; padding: 0 10px 0 18px; }
+.jay-ttable .c-more { width: 24px; padding: 0 10px 0 0; text-align: right; }
 .jay-ttable td.c-more .jay-icon-btn { color: var(--jay-muted); }
 .jay-ttable tr:hover td.c-more .jay-icon-btn, .jay-ttable td.c-more .jay-icon-btn:focus-visible { color: var(--jay-text-2); }
 .jay-ttable .c-task { width: 99%; max-width: 0; }
@@ -252,24 +280,39 @@
 .jay-row-title:hover { text-decoration: underline; text-decoration-color: var(--jay-faint); text-underline-offset: 3px; }
 .jay-tr.is-done .jay-row-title { color: var(--jay-muted); text-decoration: line-through; text-decoration-color: var(--jay-faint); }
 .jay-ttable .c-owner .jay-who > span:last-child { max-width: 120px; color: var(--jay-text); }
-.jay-ttable .c-tags .jay-tag:not(.is-more) { display: inline-block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; line-height: 20px; }
-.jay-ttable .c-progress .jay-meter { gap: 10px; }
+.jay-ttable .c-tags .jay-tag { height: 20px; }
+.jay-ttable .c-tags .jay-tag:not(.is-more) { display: inline-block; max-width: 144px; overflow: hidden; text-overflow: ellipsis; line-height: 18px; }
+/* Compact status: dot + label, no pill box (keeps the column narrow). */
+.jay-ttable .c-status .jay-dotpill { height: 22px; padding: 0 2px 0 0; border-color: transparent; background: transparent; }
+.jay-ttable .c-progress .jay-meter { gap: 7px; }
+.jay-ttable .c-progress .jay-meter-val { min-width: 3.4ch; }
+.jay-ttable .jay-lastev { gap: 6px; }
+/* The "+N" chip that stands in for tags the narrow table drops (tagsCell). */
+.jay-tags > .jay-tag.is-collapsed { display: none; }
 
 /* Progressive columns — driven by the panel's own width (container query), so
-   the table adapts to the side tree and the viewport together. Thresholds come
-   from measured natural widths; columns drop in reverse priority:
-   counts → last update → owner names → activity → extra tags → meter bars →
-   progress → owner → project tag. (≈ viewport 1560 / 1440 / 1280 / 1100.) */
-.jay-ttable .c-task { min-width: 190px; }
+   the table adapts to the side tree and the viewport together. Thresholds are
+   measured natural widths (16-bar meter, 176px task floor); columns drop in
+   reverse priority: counts → last update → owner names → activity → extra tags
+   (a "+N" stays, so a long first tag keeps the column width) + meter bars →
+   progress → owner → project tag.
+   Panel ≈ 1076 at 1440 · 1002 at 1366 · 916 at 1280 (tree 244) · 916 at 1024
+   (no tree) · 700 at 768. */
+/* 176px floor: at a 916px panel (1280 with the tree, 1024 without) every
+   column above still fits with a few px to spare. */
+.jay-ttable .c-task { min-width: 176px; }
 @container jaytasks (max-width: 1264.98px) { .jay-ttable .c-task .jay-tcounts { display: none; } }
-@container jaytasks (max-width: 1199.98px) { .jay-ttable .c-last { display: none; } }
-@container jaytasks (max-width: 1039.98px) { .jay-ttable .c-owner .jay-who > span:last-child { display: none; } }
-@container jaytasks (max-width: 994.98px) { .jay-ttable .c-activity { display: none; } }
-@container jaytasks (max-width: 909.98px) { .jay-ttable .c-tags .jay-tags > :not(:first-child) { display: none; } }
-@container jaytasks (max-width: 839.98px) { .jay-ttable .c-progress .jay-meter-bars { display: none; } }
-@container jaytasks (max-width: 759.98px) { .jay-ttable .c-progress { display: none; } }
-@container jaytasks (max-width: 709.98px) { .jay-ttable .c-owner { display: none; } }
-@container jaytasks (max-width: 669.98px) { .jay-ttable .c-tags { display: none; } }
+@container jaytasks (max-width: 1062.98px) { .jay-ttable .c-last { display: none; } }
+@container jaytasks (max-width: 910.98px) { .jay-ttable .c-owner .jay-who > span:last-child { display: none; } }
+@container jaytasks (max-width: 881.98px) { .jay-ttable .c-activity { display: none; } }
+@container jaytasks (max-width: 799.98px) {
+  .jay-ttable .c-tags .jay-tags > :not(:first-child):not(.is-collapsed) { display: none; }
+  .jay-ttable .c-tags .jay-tags > .jay-tag.is-collapsed { display: inline-flex; }
+  .jay-ttable .c-progress .jay-meter-bars { display: none; }
+}
+@container jaytasks (max-width: 755.98px) { .jay-ttable .c-progress { display: none; } }
+@container jaytasks (max-width: 688.98px) { .jay-ttable .c-owner { display: none; } }
+@container jaytasks (max-width: 636.98px) { .jay-ttable .c-tags { display: none; } }
 
 /* Narrow panel: Export / New Task move up into the tabs row so the filter
    pills keep the whole toolbar. */
@@ -322,8 +365,17 @@
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
-.jay-tbody > .jay-board { overflow: visible; padding: 16px 20px 24px; }
-/* Keep the right padding when columns overflow the panel horizontally. */
+/* Tasks board: one explicit track per column (--jay-kcols, set by renderBoard),
+   so the columns share the panel evenly (4 × ≈200px at 1280, ≈240 at 1440).
+   The ::after spacer lands in a 4px implicit track: with no right padding it
+   keeps the same 16px end gap when the columns overflow the panel. */
+.jay-tbody > .jay-board {
+  grid-template-columns: repeat(var(--jay-kcols, 4), minmax(200px, 400px));
+  grid-auto-columns: 4px;
+  gap: 12px;
+  overflow: visible;
+  padding: 16px 0 24px 16px;
+}
 .jay-tbody > .jay-board::after { content: ''; width: 4px; }
 .jay-kcol { display: flex; flex-direction: column; gap: 10px; min-width: 0; border-radius: var(--jay-r-lg); transition: background var(--jay-dur) var(--jay-ease), box-shadow var(--jay-dur) var(--jay-ease); }
 .jay-kcol.is-over { background: var(--jay-accent-softer); box-shadow: 0 0 0 1px color-mix(in srgb, var(--jay-accent) 45%, transparent); }
@@ -369,6 +421,8 @@
   font-size: 12.5px;
 }
 
+/* Card: a plain draggable article; the title is its button (.jay-kcard-open),
+   and the whole card shows that button's focus ring. */
 .jay-kcard {
   --jay-av-ring: var(--jay-surface-2);
   position: relative;
@@ -381,18 +435,29 @@
   background: var(--jay-surface-2);
   border: 1px solid transparent;
   cursor: grab;
-  transition: border-color var(--jay-dur) var(--jay-ease), opacity var(--jay-dur) var(--jay-ease);
+  transition: border-color var(--jay-dur) var(--jay-ease), opacity var(--jay-dur) var(--jay-ease), background var(--jay-dur) var(--jay-ease);
 }
 .jay-kcard:hover { border-color: var(--jay-border-strong); }
-.jay-kcard:focus-visible { outline-offset: 2px; }
 .jay-kcard:active { cursor: grabbing; }
+/* Press feedback for the card itself (not when one of its buttons is pressed). */
+.jay-kcard:active:not(:has(.jay-kcard-more:active, .jay-kcard-sub:active)) { background: var(--jay-surface-3); }
+.jay-kcard:has(.jay-kcard-open:focus-visible) { outline: 2px solid var(--jay-accent); outline-offset: 2px; }
+:root:not(.dark) .jay-kcard:has(.jay-kcard-open:focus-visible) { outline-color: var(--jay-accent-text); }
 .jay-kcard.is-dragging { opacity: 0.4; }
-.jay-kcard-top { display: flex; align-items: flex-start; gap: 8px; min-height: 18px; }
-.jay-kcard-top > .jay-tags { flex: 1 1 auto; flex-wrap: wrap; row-gap: 5px; padding-top: 1px; }
+.jay-kcard-top { display: flex; align-items: flex-start; gap: 8px; min-width: 0; min-height: 18px; }
+/* Deepsleep: one row of tiny solid chips (a long first label → 1 chip + "+N"). */
+.jay-kcard-top > .jay-tags { flex: 1 1 auto; flex-wrap: nowrap; overflow: hidden; padding-top: 1px; }
+.jay-kcard .jay-tag.is-solid { height: 17px; padding: 0 6px; font-size: 10px; font-weight: 500; letter-spacing: 0; }
+.jay-kcard .jay-tag.is-solid:not(.is-more) { display: inline-block; max-width: 128px; overflow: hidden; text-overflow: ellipsis; line-height: 17px; flex-shrink: 1; min-width: 0; }
+.jay-kcard .jay-tags > .jay-tag.is-more { height: 17px; font-size: 10px; font-weight: 500; }
 .jay-kcard-top > .jay-kcard-status { flex: 1 1 auto; }
 .jay-kcard-more { margin: -6px -8px -6px auto; color: var(--jay-text-2); }
 .jay-kcard-title { margin: 0; font-family: var(--jay-font-display); font-size: 15px; font-weight: 500; line-height: 1.35; letter-spacing: -0.005em; color: var(--jay-text); overflow-wrap: anywhere; }
-.jay-kcard.is-done .jay-kcard-title { color: var(--jay-muted); text-decoration: line-through; text-decoration-color: var(--jay-faint); }
+.jay-kcard-open { display: block; width: 100%; padding: 0; text-align: left; font: inherit; letter-spacing: inherit; color: inherit; cursor: inherit; }
+.jay-kcard-open:focus-visible { outline: none; }
+/* Completed cards stay full size and readable (Deepsleep); strike-through is
+   kept for list rows only. */
+.jay-kcard.is-done .jay-kcard-title { color: var(--jay-text-2); text-decoration: none; }
 .jay-kcard-desc {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -413,19 +478,30 @@
 .jay-kcl > li.is-done > i { background: var(--jay-muted); box-shadow: none; }
 .jay-kcl > li.is-more { padding-left: 17px; color: var(--jay-muted); font-size: 12px; }
 .jay-kcard-sub { align-self: center; min-width: 58%; height: 32px; margin-top: 2px; border-radius: var(--jay-r-md); font-size: 12px; }
-.jay-kcard-foot { display: flex; align-items: center; gap: 10px; min-width: 0; margin-top: 2px; padding-top: 12px; border-top: 1px solid var(--jay-border); }
+/* Footer: two faces + "+N", counts pushed to the right edge — fits a 200px column. */
+.jay-kcard-foot { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 2px; padding-top: 12px; border-top: 1px solid var(--jay-border); container: jaykfoot / inline-size; }
+/* Narrow cards (the 190px project columns at 1280): smaller faces keep the
+   counts inside the card. */
+@container jaykfoot (max-width: 170px) {
+  .jay-kcard-foot .jay-av-stack > .jay-av.is-md { width: 28px; height: 28px; border-radius: 8px; font-size: 10.5px; }
+}
+.jay-kcard-foot > .jay-av-stack + * { margin-left: auto; }
+.jay-kcard-foot .jay-av-stack { min-width: 0; overflow: hidden; }
 .jay-kcard-foot .jay-av-stack > .jay-av { border-radius: 9px; }
 .jay-kcard-foot .jay-av-stack > .jay-av.is-md + .jay-av { margin-left: 4px; }
 .jay-kcard-foot .jay-av-stack > .jay-av { box-shadow: none; }
-.jay-kcard-foot .jay-tcounts { color: var(--jay-text-2); }
+.jay-kcard-foot .jay-tcounts { gap: 8px; color: var(--jay-text-2); }
 .jay-board.is-compact .jay-kcard { padding: 12px 12px 10px; gap: 8px; }
 .jay-board.is-compact .jay-kcard-title { font-size: 14px; }
 :root:not(.dark) .jay-kcard { background: var(--jay-surface); border-color: var(--jay-border-strong); box-shadow: var(--jay-shadow-sm); --jay-av-ring: var(--jay-surface); }
 :root:not(.dark) .jay-kcard:hover { border-color: color-mix(in srgb, var(--jay-text) 24%, transparent); }
+:root:not(.dark) .jay-kcard:active:not(:has(.jay-kcard-more:active, .jay-kcard-sub:active)) { background: var(--jay-surface-2); }
 :root:not(.dark) .jay-kcol-add { background: var(--jay-surface-2); box-shadow: inset 0 0 0 1px var(--jay-border); }
 :root:not(.dark) .jay-tbody > .jay-board { background: var(--jay-surface-2); }
 
-/* ── Phone list cards ── */
+/* ── Phone list cards ──
+   The whole card opens the task (the main button's ::after covers it); the
+   done check sits above that layer and keeps its own 40px touch target. */
 .jay-mlist { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .jay-mcard {
   position: relative;
@@ -437,10 +513,16 @@
   border-radius: var(--jay-r-lg);
   background: var(--jay-surface);
   --jay-av-ring: var(--jay-surface);
+  transition: background var(--jay-dur) var(--jay-ease);
 }
-.jay-mcard > .jay-check { width: 22px; height: 22px; margin-top: 1px; }
+.jay-mcard > .jay-check { position: relative; z-index: 1; width: 22px; height: 22px; margin-top: 1px; }
 .jay-mcard > .jay-av { border-radius: 10px; }
 .jay-mcard-main { display: grid; gap: 9px; min-width: 0; text-align: left; border-radius: var(--jay-r-sm); }
+.jay-mcard-main::after { content: ''; position: absolute; inset: 0; border-radius: var(--jay-r-lg); }
+.jay-mcard-main:focus-visible { outline: none; }
+.jay-mcard:has(> .jay-mcard-main:focus-visible) { outline: 2px solid var(--jay-accent); outline-offset: 2px; }
+:root:not(.dark) .jay-mcard:has(> .jay-mcard-main:focus-visible) { outline-color: var(--jay-accent-text); }
+.jay-mcard:has(> .jay-mcard-main:active) { background: var(--jay-surface-2); }
 .jay-mcard-title { font-family: var(--jay-font-display); font-size: 15px; font-weight: 500; line-height: 1.35; color: var(--jay-text); overflow-wrap: anywhere; }
 .jay-mcard.is-done .jay-mcard-title { color: var(--jay-muted); text-decoration: line-through; text-decoration-color: var(--jay-faint); }
 .jay-mcard-tags { display: flex; min-width: 0; overflow: hidden; }
@@ -449,14 +531,28 @@
 
 /* ── Task drawer form ── */
 .jay-tdrawer .jay-panel-body { padding-top: 10px; }
+/* Edit mode: the title field is the heading. The h2 stays as the dialog's
+   accessible name but is visually hidden, so the title isn't shown twice. */
+.jay-tdrawer.is-edit .jay-panel-title { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.jay-tform-head { display: grid; min-width: 0; }
+.jay-tdrawer.is-edit .jay-panel-body { padding-top: 0; }
+.jay-tdrawer.is-edit .jay-tform-head { font-size: 18px; }
+.jay-tdrawer.is-edit .jay-tform-title.jay-input { min-height: 40px; margin: -4px -12px 0; padding: 7px 12px; font-size: 1em; line-height: 1.35; }
+.jay-tdrawer.is-edit .jay-tform-title.jay-input:not(:hover, :focus) { border-color: transparent; background: transparent; box-shadow: none; }
 .jay-tform { gap: 20px; }
+/* One-row textarea that grows with the title (fitTitle() in jay-tasks.js). */
 .jay-tform-title.jay-input {
-  height: 48px;
-  padding: 0 14px;
+  display: block;
+  height: auto;
+  min-height: 48px;
+  padding: 12px 14px;
   border-radius: var(--jay-r-lg);
   font-family: var(--jay-font-display);
   font-size: 16px;
   font-weight: 500;
+  line-height: 22px;
+  resize: none;
+  overflow: hidden;
 }
 .jay-tprops { display: grid; gap: 4px; }
 .jay-tprop { display: grid; grid-template-columns: 108px minmax(0, 1fr); align-items: center; gap: 12px; min-height: 40px; }
@@ -501,7 +597,7 @@
 .jay-tcl-add { display: flex; align-items: center; gap: 8px; }
 .jay-tcl-add > .jay-input { height: 36px; font-size: 13px; }
 .jay-tcl-add > .jay-btn { height: 36px; border-radius: var(--jay-r-md); }
-.jay-tform textarea.jay-input { min-height: 96px; font-size: 13px; }
+.jay-tform textarea.jay-input:not(.jay-tform-title) { min-height: 96px; font-size: 13px; }
 .jay-tform-meta { display: grid; gap: 14px; padding-top: 18px; border-top: 1px solid var(--jay-border); }
 .jay-tform-meta .jay-dl.is-meta { padding-top: 0; border-top: 0; }
 .jay-tform-people { display: flex; align-items: center; gap: 10px; min-width: 0; --jay-av-ring: var(--jay-elevated); }
@@ -510,49 +606,73 @@
 :root:not(.dark) .jay-tcl-item { background: var(--jay-surface-2); box-shadow: inset 0 0 0 1px var(--jay-border); }
 
 /* ── Responsive ── */
-/* Side tree hidden (< 1024): view chips + toolbar search take over. */
-@media (max-width: 1023.98px) {
-  .jay-tchips { display: flex; }
-  .jay-tsearch { display: flex; }
+/* < 1200: the Tasks tree hides (the table would shrink to Task/Status/Due);
+   view chips + toolbar search take over. Projects keeps its tree. */
+@media (max-width: 1199.98px) {
+  .jay-layout.jay-tasks.has-side { grid-template-columns: minmax(0, 1fr); }
+  .jay-layout.jay-tasks > .jay-side { display: none; }
+  .jay-tchips-row { display: flex; }
+  .jay-tsearch { display: flex; flex: 0 1 200px; }
+  /* The toolbar now also holds the search: Export / New Task move up into the
+     tabs row so all four filter pills stay visible. */
+  .jay-ttoolbar > .jay-texport, .jay-ttoolbar > .jay-tnew, .jay-ttoolbar > .jay-spacer { display: none; }
+  .jay-ttabs > .jay-tnew-sm, .jay-ttabs > .jay-texport-sm { display: inline-flex; }
+  .jay-tpills { flex: 1 1 auto; }
 }
 @media (max-width: 767.98px) {
-  /* Phones: the main panel dissolves into the canvas; rows become cards. */
+  /* Phones: the main panel dissolves into the canvas; rows become cards.
+     Chrome is two rows (tabs + search/New · Filter pill + view chips), so the
+     first card starts ≈ 170px down; search opens in place from its icon. */
   .jay-tasks > .jay-tmain.jay-box { background: transparent; border: 0; box-shadow: none; overflow: visible; border-radius: 0; }
-  .jay-ttabs { padding: 0 4px; }
+  .jay-ttabs { gap: 6px; padding: 0 4px; }
   .jay-ttabs > .jay-tabs { gap: 22px; }
   .jay-ttabs .jay-tab { height: 46px; }
   .jay-ttabs > .jay-tnew-sm { display: inline-flex; }
+  .jay-ttabs > .jay-tsearch-toggle { display: inline-grid; }
   .jay-ttabs > .jay-texport-sm, .jay-tclear { display: none; }
-  .jay-tchips { margin: 0 -12px; padding: 12px 12px 0; }
-  .jay-ttoolbar { flex-wrap: wrap; gap: 8px; padding: 10px 0 12px; border-bottom: 0; }
+  .jay-tchips-row { margin: 0 -12px; padding: 12px 12px 0; }
+  .jay-tfilter { display: inline-flex; border-radius: var(--jay-r-pill); }
+  /* List view: the view chips stay in reach while the list scrolls. */
+  .jay-tasks:not(.is-board) .jay-tchips-row { position: sticky; top: 0; z-index: 3; padding-bottom: 10px; margin-bottom: -10px; background: var(--jay-canvas); }
+  .jay-ttoolbar { display: none; flex-wrap: wrap; gap: 8px; padding: 10px 0 2px; border-bottom: 0; }
+  .jay-tmain.is-searching > .jay-ttoolbar:not([hidden]) { display: flex; }
   .jay-tsearch { flex: 1 1 100%; min-width: 0; }
   .jay-tsearch > .jay-input { height: 40px; border-radius: var(--jay-r-lg); background: var(--jay-surface); border-color: transparent; font-size: 16px; }
   :root:not(.dark) .jay-tsearch > .jay-input { border-color: var(--jay-border-strong); }
-  .jay-tpills { flex: 1 1 100%; margin: 0 -12px; padding: 0 12px; }
-  .jay-tpills > .jay-fpill { height: 36px; background: var(--jay-surface); }
-  .jay-ttoolbar > .jay-spacer, .jay-ttoolbar > .jay-texport, .jay-ttoolbar > .jay-tnew { display: none; }
+  .jay-tpills, .jay-ttoolbar > .jay-spacer, .jay-ttoolbar > .jay-texport, .jay-ttoolbar > .jay-tnew { display: none; }
   .jay-bulkbar { margin: 8px 0; border-radius: var(--jay-r-lg); border-bottom: 0; }
-  .jay-tbody { overflow: visible; }
+  .jay-tbody { overflow: visible; padding-top: 12px; }
   .jay-tbody > .jay-state { min-height: 200px; border-radius: var(--jay-r-lg); background: var(--jay-surface); }
   .jay-calcbar { display: none; }
   .jay-board { grid-auto-columns: 84vw; gap: 12px; scroll-snap-type: x mandatory; scrollbar-width: none; }
   .jay-board::-webkit-scrollbar { display: none; }
   .jay-board > .jay-kcol { scroll-snap-align: start; }
   .jay-tbody > .jay-board::after { display: none; }
+  /* Bounded board: one screen tall, each column scrolls on its own, so the
+     tallest column no longer sets the page height and the column heads and
+     "Add Task" rows stay in view. */
   .jay-tbody > .jay-board {
+    grid-template-columns: repeat(var(--jay-kcols, 4), 84vw);
     grid-auto-columns: 84vw;
     gap: 12px;
+    height: calc(var(--jay-vvh, 100dvh) - 56px - var(--jay-bottomnav-h) - env(safe-area-inset-bottom, 0px) - 16px);
+    align-items: stretch;
     margin: 0 -12px;
-    padding: 0 12px 12px;
+    padding: 0 12px;
     overflow-x: auto;
+    overflow-y: hidden;
     scroll-snap-type: x mandatory;
     scroll-padding: 0 12px;
     scrollbar-width: none;
     background: transparent;
   }
+  :root:not(.dark) .jay-tbody > .jay-board { background: transparent; }
   .jay-tbody > .jay-board::-webkit-scrollbar { display: none; }
-  .jay-tbody > .jay-board > .jay-kcol { scroll-snap-align: start; }
+  .jay-tbody > .jay-board > .jay-kcol { display: flex; flex-direction: column; min-height: 0; scroll-snap-align: start; }
+  .jay-tbody .jay-kcol-body { flex: 1 1 auto; min-height: 0; align-content: start; margin: 0 -4px; padding: 4px 4px 16px; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: none; }
+  .jay-tbody .jay-kcol-body::-webkit-scrollbar { display: none; }
   .jay-kcard { --jay-av-ring: var(--jay-surface); background: var(--jay-surface); }
+  .jay-kcard:active:not(:has(.jay-kcard-more:active, .jay-kcard-sub:active)) { background: var(--jay-surface-2); }
   .jay-kcol-add { background: var(--jay-surface); }
   :root:not(.dark) .jay-kcol-add { background: var(--jay-surface); }
   .jay-tprop { grid-template-columns: 96px minmax(0, 1fr); }
@@ -567,15 +687,23 @@
   .jay-check::before, .jay-tcb::after, .jay-tcl-box::before { content: ''; position: absolute; inset: -10px; }
   .jay-tcb { position: relative; width: 20px; height: 20px; }
   .jay-tcl-box { position: relative; width: 22px; height: 22px; }
-  .jay-tchip { height: 40px; padding: 0 14px; }
+  .jay-tchip, .jay-tfilter { height: 40px; padding: 0 14px; }
   .jay-kcol-add { height: 44px; }
   .jay-kcard-sub { height: 40px; }
   .jay-ttoolbar > .jay-btn, .jay-tpills > .jay-fpill, .jay-tsearch > .jay-input { height: 40px; }
   .jay-calc-cell.is-add { min-height: 44px; }
   .jay-tprop-v > .jay-input, .jay-tcl-add > .jay-input, .jay-tcl-add > .jay-btn { height: 42px; }
-  .jay-tprop-v > .jay-segmented > button { height: 36px; }
+  /* Drawer owns its segmented size (36px buttons in a 42px row, like the
+     inputs); min-height beats page-level touch rules for .jay-segmented. */
+  .jay-tprop-v > .jay-segmented > button { height: 36px; min-height: 0; }
   .jay-th-btn { height: 40px; }
+  /* Icon buttons grow to 40px on touch, so rows do too. */
+  .jay-ttable :is(td, tbody th) { height: 44px; }
+}
+/* Touch tablets: taller rows, and the whole row opens the task (jay-tasks.js). */
+@media (pointer: coarse) and (max-width: 1279.98px) {
+  .jay-ttable :is(td, tbody th) { height: 48px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .jay-check, .jay-check > .jay-icon, .jay-tcb, .jay-kcard, .jay-kcol, .jay-kcol-add, .jay-tchip, .jay-ttable td, .jay-th-btn > .jay-icon, .jay-tcl-box, .jay-tcl-del { transition: none; }
+  .jay-check, .jay-check > .jay-icon, .jay-tcb, .jay-kcard, .jay-kcol, .jay-kcol-add, .jay-tchip, .jay-ttable :is(td, tbody th), .jay-th-btn > .jay-icon, .jay-tcl-box, .jay-tcl-del, .jay-mcard { transition: none; }
 }

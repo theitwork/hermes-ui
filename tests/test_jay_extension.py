@@ -172,12 +172,35 @@ def test_only_the_provider_layer_talks_to_hermes_and_only_reads():
             assert "/api/" not in src, "%s must not call Hermes APIs directly" % path.name
 
 
+STORAGE_CALL = re.compile(r"storage\.(?:get|set|remove)\(\s*(?:'([^']*)'|([A-Za-z_$][\w$]*))")
+STRING_CONST = re.compile(r"\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*'([^']*)'\s*;")
+SECRET_LIKE = re.compile(r"token|secret|password|apikey|api_key|credential", re.I)
+
+
 def test_no_placeholder_copy_or_secret_like_keys():
     for path in _js_files():
         src = path.read_text(encoding="utf-8")
         assert "lorem" not in src.lower(), path.name
-        for key in re.findall(r"storage\.(?:get|set|remove)\('([^']+)'", src):
-            assert not re.search(r"token|secret|password|apikey|api_key|credential", key, re.I), key
+        consts = dict(STRING_CONST.findall(src))
+        # Key constants are checked even when no storage call names them directly.
+        keys = [v for k, v in consts.items() if k.endswith("_KEY")]
+        for literal, ident in STORAGE_CALL.findall(src):
+            if ident:
+                # Fail closed: a key the scan cannot resolve cannot be checked.
+                assert ident in consts, "%s: storage key %s is not a string constant" % (path.name, ident)
+                keys.append(consts[ident])
+            else:
+                keys.append(literal)
+        for key in keys:
+            assert not SECRET_LIKE.search(key), (path.name, key)
+
+
+def test_storage_key_scan_resolves_constants():
+    src = "const DEMO_KEY = 'demo-v2';\nJAY.storage.get(DEMO_KEY, null);\nJAY.storage.set('adapters', x);"
+    consts = dict(STRING_CONST.findall(src))
+    found = [consts.get(ident, ident) if ident else literal for literal, ident in STORAGE_CALL.findall(src)]
+    assert found == ["demo-v2", "adapters"]
+    assert SECRET_LIKE.search("api_token")
 
 
 # ── Data layer (runs the real modules in Node) ────────────────────────────
@@ -190,7 +213,13 @@ global.localStorage = {
   getItem: (k) => (Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null),
   setItem: (k, v) => { store[k] = String(v); },
   removeItem: (k) => { delete store[k]; },
+  key: (i) => (Object.keys(store)[i] === undefined ? null : Object.keys(store)[i]),
+  get length() { return Object.keys(store).length; },
 };
+// A superseded demo blob (with a typed chat message) and a Hermes key that is not ours.
+const LEGACY = JSON.stringify({ builtOn: '2020-01-01', data: { conversations: [{ id: 'main', messages: [{ role: 'user', text: 'typed by the owner' }] }] } });
+store['jay:demo-v1'] = LEGACY;
+store['hermes-theme'] = 'dark';
 global.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
 global.document = { getElementById: () => null, body: {} };
 global.requestAnimationFrame = (f) => setTimeout(f, 0);
@@ -201,6 +230,7 @@ for (const f of ['jay-core.js', 'jay-data-mock.js', 'jay-providers.js', 'jay-cha
 (async () => {
   const D = window.JAY.data;
   const out = {};
+  out.legacySweptOnLoad = !('jay:demo-v1' in store);
   out.counts = await D.getTaskCounts();
   const today = await D.getTodayItems();
   out.todaySorted = today.every((it, i) => i === 0 || new Date(today[i - 1].at) <= new Date(it.at));
@@ -211,13 +241,32 @@ for (const f of ['jay-core.js', 'jay-data-mock.js', 'jay-providers.js', 'jay-cha
   out.sessions = (await D.getRecentSessions()).map((s) => s.id);
   await D.createTask({ title: 'Renew domain', status: 'inbox' });
   out.afterCreate = await D.getTaskCounts();
+  const pick = (t) => ({ status: t.status, progress: t.progress, prevStatus: t.prevStatus || null });
+  out.task005Before = pick(await D.getTask('task-005'));
   await D.resolveAttention('at-2', 'done');
   out.afterDone = await D.getTaskCounts();
   out.task005 = (await D.getTask('task-005')).status;
   out.attentionAfterDone = (await D.getAttentionItems()).map((a) => a.id);
   await D.restoreAttention('at-2');
-  out.task005Restored = (await D.getTask('task-005')).status;
+  const restored = await D.getTask('task-005');
+  out.task005Restored = restored.status;
+  out.task005AfterUndo = pick(restored);
+  out.task005UndoEvent = restored.lastEvent && restored.lastEvent.label;
+  out.attentionAfterUndo = (await D.getAttentionItems()).some((a) => a.id === 'at-2');
   out.overdueFilter = (await D.getTasks({ due: 'overdue' })).map((t) => t.id).sort();
+  // Undoing a snooze must not reopen a task that was completed in the meantime.
+  await D.resolveAttention('at-2', 'snooze');
+  await D.completeTask('task-005', true);
+  await D.restoreAttention('at-2');
+  out.undoSnoozeTask = pick(await D.getTask('task-005'));
+  out.undoSnoozeAttention = (await D.getAttentionItems()).some((a) => a.id === 'at-2');
+  await D.completeTask('task-005', false);
+  // Undoing a snooze on an open task brings the item straight back.
+  await D.resolveAttention('at-2', 'snooze');
+  out.snoozedHidden = !(await D.getAttentionItems()).some((a) => a.id === 'at-2');
+  await D.restoreAttention('at-2');
+  out.unsnoozedVisible = (await D.getAttentionItems()).some((a) => a.id === 'at-2');
+  out.task005AfterSnoozeUndo = (await D.getTask('task-005')).status;
   D.useAdapter('projects', 'hermes');
   out.projectsViaFallback = (await D.getProjects()).length;
   D.useAdapter('projects', 'mock');
@@ -234,6 +283,11 @@ for (const f of ['jay-core.js', 'jay-data-mock.js', 'jay-providers.js', 'jay-cha
   const r3 = await window.JAY.chat.respond('Something unrelated', null);
   out.fallbackReply = r3.text;
   out.persisted = Object.keys(store).filter((k) => k.startsWith('jay:')).sort();
+  // Reset demo data also clears a superseded blob that reappears (another tab on an old build).
+  store['jay:demo-v1'] = LEGACY;
+  D.resetDemo();
+  out.afterReset = Object.keys(store).filter((k) => k.startsWith('jay:')).sort();
+  out.foreignKeptAfterReset = store['hermes-theme'] === 'dark';
   console.log(JSON.stringify(out));
 })().catch((e) => { console.error(e); process.exit(1); });
 """
@@ -279,6 +333,22 @@ def test_mutations_flow_through_every_domain(data_layer):
     assert data_layer["overdueFilter"] == ["task-005", "task-006"]
 
 
+def test_attention_undo_reverses_exactly_the_action(data_layer):
+    before = data_layer["task005Before"]
+    assert before["status"] == "in_progress" and before["progress"] < 100
+    # Undo "Done" reopens the task with its checklist progress, not 100%.
+    assert data_layer["task005AfterUndo"] == before
+    assert data_layer["task005UndoEvent"] == "Status"
+    assert data_layer["attentionAfterUndo"] is True
+    # Undo "Snooze" never reopens a task completed elsewhere; its item stays resolved.
+    assert data_layer["undoSnoozeTask"]["status"] == "done"
+    assert data_layer["undoSnoozeTask"]["progress"] == 100
+    assert data_layer["undoSnoozeAttention"] is False
+    assert data_layer["snoozedHidden"] is True
+    assert data_layer["unsnoozedVisible"] is True
+    assert data_layer["task005AfterSnoozeUndo"] == "in_progress"
+
+
 def test_unimplemented_adapter_methods_fall_back_to_mock(data_layer):
     assert data_layer["projectsViaFallback"] == 5
 
@@ -296,7 +366,14 @@ def test_mock_responder_is_local_and_honest(data_layer):
 
 
 def test_only_demo_state_is_persisted(data_layer):
+    # The harness seeds jay:demo-v1 before load; loading sweeps it.
+    assert data_layer["legacySweptOnLoad"] is True
     assert data_layer["persisted"] == ["jay:adapters", "jay:demo-v2"]
+
+
+def test_reset_demo_clears_superseded_demo_blobs(data_layer):
+    assert data_layer["afterReset"] == ["jay:adapters"]
+    assert data_layer["foreignKeptAfterReset"] is True
 
 
 # ── Preview launcher safety ───────────────────────────────────────────────

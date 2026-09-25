@@ -1,38 +1,45 @@
 /* JAY customization — focused conversation wrapper, placeholder destinations
    (Calendar, Notes, People), Integrations and System, as floating panels.
    Placeholders are honest: they explain what the area will do, say "not
-   connected", and never pretend an integration is live. System links into the
-   real Hermes surfaces. Markup comes from JAY.h()/textContent and JAY.ui.*. */
+   connected" once (the header pill), and never pretend an integration is live.
+   System links into the real Hermes surfaces. Markup comes from
+   JAY.h()/textContent and JAY.ui.*. */
 (function () {
   'use strict';
   const JAY = window.JAY;
   if (!JAY || !JAY.data) return;
   const { h, icon, fmt, mount } = JAY;
   const UI = JAY.ui;
-  const DAY = 86400000;
 
   function list(v) { return Array.isArray(v) ? v : []; }
+  function has(mod, fn) { return !!(JAY[mod] && typeof JAY[mod][fn] === 'function'); }
   function setHeader(route, cfg) {
-    if (JAY.shell && typeof JAY.shell.setHeader === 'function') JAY.shell.setHeader(Object.assign({ route }, cfg));
+    if (has('shell', 'setHeader')) JAY.shell.setHeader(Object.assign({ route }, cfg));
   }
   function go(hash) { location.hash = hash; }
+  // Open Talk and focus the composer in the same gesture (a phone opens its
+  // keyboard on the first tap). `text` is added to the draft, never replacing
+  // what the user typed; `intent` primes a mode such as "idea".
+  function talk(text, intent) {
+    if (text) {
+      if (has('chat', 'prefill')) JAY.chat.prefill(text);
+      else if (JAY.chat && JAY.chat.shared) JAY.chat.shared.draft = text;
+    }
+    if (!has('shell', 'navigate')) {
+      go('#/talk');
+      if (intent && has('chat', 'prime')) setTimeout(() => JAY.chat.prime(intent), 80);
+      return;
+    }
+    JAY.shell.navigate('#/talk');
+    if (intent && has('chat', 'prime')) JAY.chat.prime(intent);
+    if (has('chat', 'focus')) JAY.chat.focus();
+  }
   function panelHead(title, opts) {
     const o = opts || {};
     return h('div', { class: 'jay-box-head jay-pl-head' },
       o.icon ? h('span', { class: 'jay-pl-head-ic', 'aria-hidden': 'true' }, icon(o.icon, 16)) : null,
       h('div', { class: 'jay-box-titles' }, h('h2', { class: 'jay-box-title' }, title), o.sub ? h('div', { class: 'jay-box-sub' }, o.sub) : null),
       o.actions ? h('div', { class: 'jay-box-actions' }, o.actions) : null);
-  }
-  function daysAgo(d) { return Math.max(0, Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / DAY)); }
-  function agoLabel(d) {
-    const n = daysAgo(d);
-    if (n === 0) { const m = Math.round((Date.now() - new Date(d).getTime()) / 60000); return m < 60 ? Math.max(1, m) + 'm ago' : Math.round(m / 60) + 'h ago'; }
-    return n === 1 ? 'Yesterday' : n + 'd ago';
-  }
-  // CRM "Last Interaction" cell: "▢ Sep 18 | 6d ago"
-  function dateCell(d, label) {
-    return h('span', { class: 'jay-pl-date' }, icon('calendar', 13), h('span', null, fmt.dateShort(d)),
-      label ? h('span', { class: 'jay-sep', 'aria-hidden': 'true' }, '|') : null, label ? h('span', { class: 'jay-pl-date-l' }, label) : null);
   }
 
   /* ── Talk (focused Jay conversation) ───────────────────────────────── */
@@ -43,13 +50,20 @@
     render(root) {
       const chat = JAY.chat.create({ mode: 'focus' });
       mount(root, h('div', { class: 'jay-talk-page' }, chat.el));
-      setHeader('talk', { title: 'Talk to Jay', pill: { label: 'Preview', hue: 'lime' }, crumbs: ['Local responder', 'Hermes chat stays one tap away'] });
-      setTimeout(() => { if (!JAY.isMobile() || JAY.chat.shared.intent || JAY.chat.shared.draft) chat.focus(); }, 60);
-      return () => chat.destroy();
+      // The conversation panel names itself; the header only says what this is.
+      setHeader('talk', { title: 'Talk to Jay', pill: { label: 'Preview', hue: 'lime' }, crumbs: [] });
+      // Focus now, while a tap that opened Talk is still the current gesture
+      // (phones only when something was asked), with a late retry for layout.
+      const want = () => !JAY.isMobile() || JAY.chat.shared.intent || JAY.chat.shared.draft;
+      if (want()) chat.focus();
+      const t = setTimeout(() => { if (want() && !chat.el.contains(document.activeElement)) chat.focus(); }, 60);
+      return () => { clearTimeout(t); chat.destroy(); };
     },
   };
 
   /* ── Placeholder scaffold: hero panel + preview panel ──────────────── */
+  // State is said once, by the header pill. The hero explains the area; the
+  // footnote says when it arrives.
   function placeholder(cfg) {
     return {
       title: cfg.title,
@@ -57,8 +71,7 @@
         const laterId = JAY.nextId('later');
         const hero = UI.box({ class: 'jay-pl-hero' },
           h('div', { class: 'jay-pl-hero-top' },
-            h('span', { class: 'jay-pl-tile', 'aria-hidden': 'true' }, icon(cfg.icon, 22)),
-            UI.dotPill(cfg.badge || 'Not connected', cfg.badgeHue || 'neutral')),
+            h('span', { class: 'jay-pl-tile', 'aria-hidden': 'true' }, icon(cfg.icon, 22))),
           h('h2', { class: 'jay-pl-headline' }, cfg.headline),
           h('p', { class: 'jay-pl-text' }, cfg.text),
           h('ul', { class: 'jay-pl-points' }, cfg.bullets.map((b) => h('li', null, h('span', { class: 'jay-pl-check', 'aria-hidden': 'true' }, icon('check', 13)), h('span', null, b)))),
@@ -66,10 +79,10 @@
             cfg.primary ? h('button', { type: 'button', class: 'jay-btn is-primary is-lg', onclick: cfg.primary.run }, cfg.primary.icon ? icon(cfg.primary.icon, 16) : null, cfg.primary.label) : null,
             cfg.connect ? h('button', { type: 'button', class: 'jay-btn is-outline is-lg', disabled: true, 'aria-describedby': laterId }, icon('plug', 16), cfg.connect) : null),
           h('p', { class: 'jay-pl-later', id: laterId }, icon('lock', 14), h('span', null, cfg.connect
-            ? 'Not connected. Connections arrive in a later phase; credentials will live server-side, never in the browser.'
-            : 'Not connected yet. This area arrives in a later phase.')));
+            ? 'Connections arrive in a later phase; credentials will live server-side, never in the browser.'
+            : 'This area arrives in a later phase.')));
         const preview = cfg.preview ? cfg.preview() : null;
-        mount(root, h('div', { class: ['jay-layout', 'jay-pl', 'is-' + cfg.key] }, hero, preview));
+        mount(root, h('div', { class: ['jay-layout', 'jay-pl', 'is-fill', 'is-' + cfg.key] }, hero, preview));
         setHeader(cfg.key, { title: cfg.title, pill: { label: cfg.badge || 'Not connected', hue: cfg.badgeHue || 'neutral' }, crumbs: cfg.crumbs || [] });
         return cfg.cleanup || null;
       },
@@ -77,7 +90,7 @@
   }
 
   function previewBox(cls, title, sub, body, extra) {
-    return UI.box({ class: ['jay-pl-preview', cls] },
+    return UI.box({ class: ['jay-pl-preview', 'is-col', cls] },
       panelHead(title, { sub, actions: [UI.tag(extra || 'Sample', { hue: 'neutral' })] }),
       h('div', { class: 'jay-pl-preview-body' }, body));
   }
@@ -102,7 +115,7 @@
         h('div', { class: 'jay-pl-day-slots' },
           hours.map((_, r) => h('i', { class: 'jay-pl-cell', style: { gridRow: String(r + 1) } })),
           (blocks[i] || []).map(([top, len, hue]) => h('span', { class: ['jay-pl-block', 'is-' + hue], style: { gridRow: (top + 1) + ' / span ' + len } }))))));
-    return previewBox('is-calendar', 'This week', 'Illustration — events appear once a calendar is connected', grid, 'Illustration');
+    return previewBox('is-calendar', 'This week', 'Events appear here once a calendar is connected', grid, 'Illustration');
   }
 
   /* Notes: real sample notes from the demo projects. */
@@ -116,9 +129,8 @@
         full.filter((p) => p && !p.__state).forEach((p) => list(p.notes).forEach((n) => notes.push({ n, p })));
         notes.sort((a, b) => new Date(b.n.updatedAt) - new Date(a.n.updatedAt));
         if (!notes.length) { mount(body, UI.state('empty', { title: 'No notes in the demo data.', compact: true })); return; }
-        const HUE = { 1: 'lime', 2: 'blue', 3: 'orange', 4: 'yellow', 5: 'purple' };
         mount(body, notes.slice(0, 6).map(({ n, p }) => h('article', { class: 'jay-pl-note' },
-          h('div', { class: 'jay-pl-note-top' }, UI.tag(p.title, { hue: HUE[p.tone] || 'neutral', solid: true }), h('span', { class: 'jay-pl-note-time' }, agoLabel(n.updatedAt))),
+          h('div', { class: 'jay-pl-note-top' }, UI.tag(p.title, { hue: UI.toneHue(p), solid: true }), h('span', { class: 'jay-pl-note-time' }, fmt.short(n.updatedAt))),
           h('h3', { class: 'jay-pl-note-title' }, n.title),
           h('p', { class: 'jay-pl-note-text' }, n.excerpt))));
       } catch (_) { mount(body, UI.state('error', { title: 'Couldn’t load sample notes.', compact: true })); }
@@ -127,6 +139,8 @@
   }
 
   /* People: CRM-style table of the demo contacts. */
+  // "6 days ago" beside the date; nothing once the relative label is the date itself.
+  function agoLabel(d) { const rel = fmt.short(d); return rel && rel !== fmt.dateShort(d) ? rel : null; }
   const RELATION = { client: 'blue', supplier: 'orange', partner: 'purple', family: 'green', friend: 'pink' };
   function peoplePreview() {
     const body = h('div', { class: 'jay-pl-ptable' }, UI.state('loading', { rows: 5 }));
@@ -135,16 +149,15 @@
         const [people, projects] = await Promise.all([JAY.data.getPeople(), JAY.data.getProjects().catch(() => [])]);
         const ps = list(people).filter((p) => p.relation !== 'self' && p.relation !== 'assistant');
         if (!ps.length) { mount(body, UI.state('empty', { title: 'No people in the demo data.', compact: true })); return; }
-        const TONE = { 1: 'lime', 2: 'blue', 3: 'orange', 4: 'yellow', 5: 'purple' };
-        const projOf = (id) => list(projects).filter((p) => list(p.people).includes(id)).map((p) => ({ label: p.title, hue: TONE[p.tone] || 'neutral' }));
+        const projOf = (id) => list(projects).filter((p) => list(p.people).includes(id)).map((p) => ({ label: p.title, hue: UI.toneHue(p) }));
         mount(body,
           h('div', { class: 'jay-pl-prow is-head', 'aria-hidden': 'true' }, h('span', null, 'Name'), h('span', null, 'Relation'), h('span', null, 'Projects'), h('span', null, 'Last contact')),
           h('ul', { class: 'jay-pl-plist', 'aria-label': 'Sample people' }, ps.map((p) => h('li', { class: 'jay-pl-prow' },
             h('span', { class: 'jay-pl-pname' }, UI.avatar(p.name, { id: p.id, size: 'md', decorative: true }),
               h('span', { class: 'jay-pl-pname-main' }, h('span', { class: 'jay-pl-pname-t' }, p.name), h('span', { class: 'jay-pl-pname-r' }, p.role || ''))),
-            h('span', { class: 'jay-pl-prel' }, UI.tag(p.relation ? p.relation.charAt(0).toUpperCase() + p.relation.slice(1) : 'Contact', { hue: RELATION[p.relation] || 'neutral' })),
+            h('span', { class: 'jay-pl-prel' }, UI.tag(p.relation ? fmt.titleCase(p.relation) : 'Contact', { hue: RELATION[p.relation] || 'neutral' })),
             h('span', { class: 'jay-pl-pproj' }, projOf(p.id).length ? UI.tags(projOf(p.id), { max: 1 }) : h('span', { class: 'jay-pl-none' }, '—')),
-            h('span', { class: 'jay-pl-plast' }, p.lastContact ? dateCell(p.lastContact, agoLabel(p.lastContact)) : h('span', { class: 'jay-pl-none' }, 'No contact yet'))))));
+            h('span', { class: 'jay-pl-plast' }, p.lastContact ? UI.dateCell(p.lastContact, agoLabel(p.lastContact)) : h('span', { class: 'jay-pl-none' }, 'No contact yet'))))));
       } catch (_) { mount(body, UI.state('error', { title: 'Couldn’t load sample people.', compact: true })); }
     })();
     return previewBox('is-people', 'Sample people', 'Demo contacts — nothing is synced', body);
@@ -156,8 +169,8 @@
     text: 'JAY will merge events with your tasks, reminders and follow-ups into one calm view of your day and week.',
     bullets: ['Events alongside tasks and reminders', 'Conflicts surfaced in Attention', 'Ask Jay to find time or reschedule'],
     connect: 'Connect Calendar',
-    crumbs: ['Week view', 'Illustration only'],
-    primary: { label: 'Ask Jay to plan my day', icon: 'chat', run: () => { JAY.chat.shared.draft = 'Plan my day around my calendar and tasks'; go('#/talk'); } },
+    crumbs: ['Week view'],
+    primary: { label: 'Ask Jay to plan my day', icon: 'chat', run: () => talk('Plan my day around my calendar and tasks') },
     preview: calendarPreview,
   });
 
@@ -166,8 +179,8 @@
     headline: 'Capture now, organise later.',
     text: 'Notes will collect ideas, meeting notes and research from your conversations with Jay and link them to projects and people.',
     bullets: ['Ideas captured from chat or voice', 'Linked to projects and people', 'Searchable alongside Hermes memory'],
-    crumbs: ['Not connected', 'Sample notes below'],
-    primary: { label: 'Capture an idea', icon: 'lightbulb', run: () => { go('#/talk'); setTimeout(() => JAY.chat.prime('idea'), 80); } },
+    crumbs: ['Sample notes from your projects'],
+    primary: { label: 'Capture an idea', icon: 'lightbulb', run: () => talk(null, 'idea') },
     preview: notesPreview,
   });
 
@@ -177,7 +190,7 @@
     text: 'People will track relationships, last contact and open follow-ups, so Jay can remind you who is waiting on you — and who you are waiting on.',
     bullets: ['Last contact and open threads', 'Follow-ups generated from conversations', 'Linked projects, notes and files'],
     connect: 'Connect Contacts',
-    crumbs: ['Not connected', 'Sample contacts below'],
+    crumbs: ['Sample contacts'],
     preview: peoplePreview,
   });
 
@@ -185,6 +198,7 @@
   const INT_GROUP = { email: 'messaging', whatsapp: 'messaging', telegram: 'messaging', calendar: 'productivity', contacts: 'productivity', finance: 'life', weather: 'life', news: 'life' };
   const INT_TABS = [['all', 'All'], ['messaging', 'Messaging'], ['productivity', 'Productivity'], ['life', 'Life']];
   const INT_HUE = { calendar: 'blue', email: 'purple', whatsapp: 'green', telegram: 'cyan', contacts: 'orange', finance: 'yellow', weather: 'cyan', news: 'pink' };
+  const INT_CRUMB = 'Credentials stay server-side';
 
   JAY.views.integrations = {
     title: 'Integrations',
@@ -193,6 +207,7 @@
       let group = 'all';
       const grid = h('div', { class: 'jay-int-grid' }, UI.state('loading', { rows: 4 }));
       const tabsHost = h('div', { class: 'jay-int-tabs' });
+      // Each card says "planned" once (the tag); the header pill says none are connected.
       function draw() {
         const shown = group === 'all' ? items : items.filter((it) => (INT_GROUP[it.id] || 'other') === group);
         if (!shown.length) { mount(grid, UI.box({ class: 'jay-pl-emptybox' }, UI.state('empty', { title: 'Nothing in this group yet.', compact: true }))); return; }
@@ -203,22 +218,20 @@
           h('h2', { class: 'jay-int-title' }, it.title),
           h('p', { class: 'jay-int-text' }, it.text),
           h('div', { class: 'jay-int-foot' },
-            UI.dotPill('Not connected', 'neutral'),
-            h('span', { class: 'jay-spacer' }),
             h('button', { type: 'button', class: 'jay-btn is-inset is-sm', disabled: true, 'aria-label': 'Connect ' + it.title + ' (arrives in a later phase)' }, icon('plug', 14), 'Connect')))));
       }
       function drawTabs() {
         const count = (g) => (g === 'all' ? items.length : items.filter((it) => (INT_GROUP[it.id] || 'other') === g).length);
-        mount(tabsHost, UI.tabs(INT_TABS.map(([id, label]) => ({ id, label, badge: count(id), badgeAccent: false })), {
+        mount(tabsHost, UI.tabs(INT_TABS.map(([id, label]) => ({ id, label, badge: count(id) || undefined, badgeAccent: false })), {
           variant: 'boxed', active: group, label: 'Integration groups',
           onSelect: (g) => { group = g; draw(); },
         }));
       }
-      mount(root, h('div', { class: 'jay-layout jay-int' },
-        UI.box({ class: 'jay-int-bar' }, tabsHost,
-          h('p', { class: 'jay-int-note' }, icon('lock', 14), h('span', null, 'Credentials will live server-side in jay-core — never in the browser, mock data or Git.'))),
-        grid));
-      setHeader('integrations', { pill: { label: 'None connected', hue: 'neutral' }, crumbs: ['Planned integrations', 'Nothing can be set up yet'] });
+      function header() {
+        setHeader('integrations', { pill: { label: 'None connected', hue: 'neutral' }, crumbs: (items.length ? [items.length + ' planned'] : []).concat([INT_CRUMB]) });
+      }
+      mount(root, h('div', { class: 'jay-layout jay-int' }, UI.box({ class: 'jay-int-bar' }, tabsHost), grid));
+      header();
       drawTabs();
       let disposed = false;
       let seq = 0;
@@ -228,9 +241,10 @@
         try {
           const res = await JAY.data.getIntegrations();
           if (disposed || my !== seq) return;
-          if (res && res.__state) { items = []; drawTabs(); mount(grid, UI.box({ class: 'jay-pl-emptybox' }, UI.state(res.__state))); return; }
+          if (res && res.__state) { items = []; drawTabs(); header(); mount(grid, UI.box({ class: 'jay-pl-emptybox' }, UI.state(res.__state))); return; }
           items = list(res);
           drawTabs();
+          header();
           if (!items.length) { mount(grid, UI.box({ class: 'jay-pl-emptybox' }, UI.state('empty', { title: 'No integrations planned.', compact: true }))); return; }
           draw();
         } catch (_) {
@@ -258,36 +272,25 @@
   const STATE_HUE = { online: 'green', warning: 'yellow', offline: 'red' };
   const STATUS_ICON = { jay: 'sparkle', hermes: 'server', voice: 'mic', automations: 'automations', oci: 'database' };
 
-  function segmented(options, value, onPick, label) {
-    const seg = h('div', { class: 'jay-segmented', role: 'radiogroup', 'aria-label': label });
-    options.forEach(([v, l, ic]) => seg.appendChild(h('button', {
-      type: 'button', role: 'radio', class: v === value ? 'is-active' : '', 'aria-checked': v === value ? 'true' : 'false',
-      onclick: (e) => {
-        seg.querySelectorAll('button').forEach((b) => { const on = b === e.currentTarget; b.classList.toggle('is-active', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); });
-        onPick(v);
-      },
-    }, ic ? icon(ic, 15) : null, l)));
-    return seg;
-  }
-
-  // Run cadence for the last 14 days, derived from the schedule text only
-  // (no run history exists yet): daily jobs run every day, weekly jobs once.
+  // Runs over the last 14 days: 1 = ran, 0 = not scheduled, -1 = failed (one
+  // red bar). Uses the automation's own run history; without one, the cadence
+  // is derived from the schedule text and only the latest run can show failed.
   const WEEKDAYS = { sundays: 0, mondays: 1, tuesdays: 2, wednesdays: 3, thursdays: 4, fridays: 5, saturdays: 6 };
-  function cadence(a) {
+  function runsOf(a) {
+    if (Array.isArray(a.runs) && a.runs.length) return a.runs.slice(-14).map((n) => Math.max(-1, Math.min(1, Math.round(Number(n) || 0))));
     const s = String(a.schedule || '').toLowerCase();
     const wk = Object.keys(WEEKDAYS).find((k) => s.includes(k));
     const today = new Date();
     return Array.from({ length: 14 }, (_, i) => {
-      const d = new Date(today.getTime() - (13 - i) * DAY);
+      const d = new Date(today.getTime() - (13 - i) * 86400000);
       const runs = s.startsWith('daily') ? 1 : (wk && d.getDay() === WEEKDAYS[wk] ? 1 : 0);
-      if (i === 13 && a.state === 'failed') return 0;
-      return runs;
+      return i === 13 && a.state === 'failed' ? -1 : runs;
     });
   }
+  // "▢ Daily | 07:30"
   function scheduleCell(a) {
     const m = /^(.*?)\s+(\d{1,2}:\d{2})$/.exec(String(a.schedule || ''));
-    return h('span', { class: 'jay-pl-date' }, icon('calendar', 13), h('span', null, m ? m[1] : (a.schedule || '—')),
-      m ? h('span', { class: 'jay-sep', 'aria-hidden': 'true' }, '|') : null, m ? h('span', { class: 'jay-pl-date-l' }, m[2]) : null);
+    return UI.dateCell(null, m ? m[2] : null, { text: m ? m[1] : (a.schedule || '—') });
   }
 
   JAY.views.system = {
@@ -296,7 +299,6 @@
       const statusBox = h('div', { class: 'jay-box-body jay-sys-body' });
       const autoBox = h('div', { class: 'jay-box-body jay-sys-body' });
       const eventsBox = h('div', { class: 'jay-sys-events' });
-      const themeNow = JAY.shell ? JAY.shell.themePreference() : 'dark';
       const sim = JAY.data.simulated();
       const simGrid = h('div', { class: 'jay-sim-grid' }, SIM_DOMAINS.map(([d, l]) => {
         const id = JAY.nextId('sim');
@@ -304,14 +306,28 @@
         sel.addEventListener('change', () => JAY.data.simulate(d, sel.value));
         return h('div', { class: 'jay-field is-inline' }, h('label', { class: 'jay-label', for: id }, l), sel);
       }));
-      const mockStatus = JAY.data.isMock('system');
+
+      // "Sample data" is said once, beside the data it describes; the header
+      // mentions the source only when the Hermes bridge is live.
+      const statusSub = h('div', { class: 'jay-box-sub' });
+      const statusPill = h('div', { class: 'jay-box-actions' });
+      const sysHeader = (mock) => setHeader('system', { pill: { label: 'Preview', hue: 'lime' }, crumbs: ['JAY ' + JAY.version].concat(mock ? [] : ['Hermes health bridge on']) });
+      function syncSource() {
+        const mock = JAY.data.isMock('system');
+        statusSub.textContent = mock ? 'Services Jay depends on' : 'The Hermes row reads live /health';
+        mount(statusPill, UI.dotPill(mock ? 'Sample data' : 'Hermes health', mock ? 'neutral' : 'green'));
+        sysHeader(mock);
+      }
 
       const main = h('div', { class: 'jay-sys-grid' },
         UI.box({ class: 'jay-sys-card is-status' },
-          panelHead('Jay status', { icon: 'system', sub: mockStatus ? 'Services Jay depends on' : 'The Hermes row reads live /health', actions: [UI.dotPill(mockStatus ? 'Sample data' : 'Hermes health', mockStatus ? 'neutral' : 'green')] }),
+          h('div', { class: 'jay-box-head jay-pl-head' },
+            h('span', { class: 'jay-pl-head-ic', 'aria-hidden': 'true' }, icon('system', 16)),
+            h('div', { class: 'jay-box-titles' }, h('h2', { class: 'jay-box-title' }, 'Jay status'), statusSub),
+            statusPill),
           statusBox),
         UI.box({ class: 'jay-sys-card is-auto' },
-          panelHead('Automations', { icon: 'automations', sub: 'Runs, last 14 days (from schedule)', actions: [h('button', { type: 'button', class: 'jay-link', onclick: () => go('#/automations') }, 'Scheduled jobs', icon('chevron-right', 14))] }),
+          panelHead('Automations', { icon: 'automations', sub: 'Runs over the last 14 days', actions: [h('button', { type: 'button', class: 'jay-link', onclick: () => go('#/automations') }, 'Scheduled jobs', icon('chevron-right', 14))] }),
           autoBox),
         UI.box({ class: 'jay-sys-card is-hermes' },
           panelHead('Hermes', { icon: 'server', sub: 'The full Hermes WebUI is still here, unchanged. These open the real Hermes panels.', actions: [UI.dotPill('Live', 'green')] }),
@@ -325,37 +341,53 @@
           h('div', { class: 'jay-box-body' }, simGrid,
             h('div', { class: 'jay-sys-actions' },
               h('button', { type: 'button', class: 'jay-btn is-outline', onclick: () => { JAY.data.clearSimulations(); simGrid.querySelectorAll('select').forEach((s) => { s.value = 'normal'; }); UI.toast('Simulations cleared', { icon: 'check' }); } }, 'Clear simulations'),
-              h('button', { type: 'button', class: 'jay-btn is-outline is-danger', onclick: () => { JAY.data.resetDemo(); JAY.chat.shared.convId = 'main'; JAY.chat.shared.draft = ''; UI.toast('Demo data reset', { icon: 'refresh' }); } }, icon('refresh', 15), 'Reset demo data')))));
+              h('button', {
+                type: 'button', class: 'jay-btn is-outline is-danger',
+                onclick: () => {
+                  JAY.data.resetDemo();
+                  if (JAY.chat && JAY.chat.shared) Object.assign(JAY.chat.shared, { convId: 'main', draft: '', draftSource: null });
+                  UI.toast('Demo data reset', { icon: 'refresh' });
+                },
+              }, icon('refresh', 15), 'Reset demo data')))));
+
+      // Radio groups (one tab stop, arrow keys). The theme group also follows
+      // changes made from the header or rail toggle.
+      const themeSeg = UI.segmented([['dark', 'Dark', 'moon'], ['light', 'Light', 'sun'], ['system', 'System', 'monitor']],
+        JAY.shell ? JAY.shell.themePreference() : 'dark', (v) => JAY.shell.setTheme(v), 'Theme');
+      themeSeg.querySelectorAll('button[data-value]').forEach((b) => { b.dataset.jayThemeChoice = b.dataset.value; });
+      const themeMo = new MutationObserver(() => { if (JAY.shell) themeSeg.setValue(JAY.shell.themePreference()); });
+      themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
       const aside = h('div', { class: 'jay-stack jay-sys-aside' },
         UI.box({ class: 'jay-sys-card' },
           panelHead('Appearance', { icon: 'sun' }),
           h('div', { class: 'jay-box-body' },
-            segmented([['dark', 'Dark', 'moon'], ['light', 'Light', 'sun'], ['system', 'System', 'monitor']], themeNow, (v) => JAY.shell.setTheme(v), 'Theme'),
+            themeSeg,
             h('p', { class: 'jay-sys-lede' }, 'Shared with Hermes. The “JAY” skin is also available in Hermes Settings → Appearance.'))),
         UI.box({ class: 'jay-sys-card' },
           panelHead('Data sources', { icon: 'database', sub: 'Mock by default. The Hermes bridges only read and never send anything.' }),
           h('div', { class: 'jay-box-body jay-sys-sources' },
             h('div', { class: 'jay-field' }, h('span', { class: 'jay-label' }, 'Continue (recent work)'),
-              segmented([['mock', 'Mock'], ['hermes', 'Hermes sessions']], JAY.data.adapterName('sessions'), (v) => JAY.data.useAdapter('sessions', v), 'Continue data source')),
+              UI.segmented([['mock', 'Mock'], ['hermes', 'Hermes sessions']], JAY.data.adapterName('sessions'), (v) => JAY.data.useAdapter('sessions', v), 'Continue data source')),
             h('div', { class: 'jay-field' }, h('span', { class: 'jay-label' }, 'Status'),
-              segmented([['mock', 'Mock'], ['hermes', 'Hermes health']], JAY.data.adapterName('system'), (v) => JAY.data.useAdapter('system', v), 'Status data source')))),
+              UI.segmented([['mock', 'Mock'], ['hermes', 'Hermes health']], JAY.data.adapterName('system'), (v) => JAY.data.useAdapter('system', v), 'Status data source')))),
         UI.box({ class: ['jay-sys-card', 'is-events'] },
           panelHead('Recent events', { icon: 'history', sub: 'From automations and Hermes' }),
           eventsBox));
 
       mount(root, h('div', { class: 'jay-layout has-aside jay-sys' }, main, aside));
-      setHeader('system', { pill: { label: 'Preview', hue: 'lime' }, crumbs: ['JAY ' + JAY.version, mockStatus ? 'Sample data' : 'Hermes health bridge on'] });
+      syncSource();
+      const offSource = JAY.on('data:system', syncSource);
 
       const w1 = JAY.widget(statusBox, {
         name: 'system-status', domains: ['system'], load: () => JAY.data.getSystemStatus(), isEmpty: () => false, skeletonRows: 5,
-        render: (st) => h('div', null,
+        render: (st) => h('div', { class: 'jay-sys-status' },
           h('ul', { class: 'jay-sys-rows' }, list(st.items).map((it) => {
             const disk = /(\d{1,3})%\s*disk/i.exec(it.detail || '');
             return h('li', { class: 'jay-sys-row' },
               h('span', { class: 'jay-sys-ic', 'aria-hidden': 'true' }, icon(STATUS_ICON[it.key] || 'circle', 15)),
               h('span', { class: 'jay-sys-main' }, h('span', { class: 'jay-sys-name' }, it.label), h('span', { class: 'jay-sys-detail' }, it.detail || '')),
-              disk ? h('span', { class: 'jay-sys-meter' }, UI.meter(Number(disk[1]), { segments: 12, label: 'Disk used' })) : h('span', { class: 'jay-sys-meter' }),
+              disk ? h('span', { class: 'jay-sys-meter' }, UI.meter(Number(disk[1]), { segments: 12, label: 'Disk used', ramp: false })) : h('span', { class: 'jay-sys-meter' }),
               UI.dotPill(it.value, STATE_HUE[it.state] || 'neutral'));
           })),
           h('div', { class: 'jay-sys-foot' },
@@ -368,10 +400,13 @@
         name: 'automations', domains: ['system'], load: () => JAY.data.getAutomations(), skeletonRows: 4,
         render: (items) => h('ul', { class: 'jay-sys-rows' }, list(items).map((a) => {
           const failed = a.state === 'failed';
+          const runs = runsOf(a);
+          const fails = runs.filter((n) => n < 0).length;
+          const ran = runs.filter((n) => n > 0).length;
           return h('li', { class: ['jay-sys-row', 'is-auto', failed ? 'is-failed' : ''] },
             h('span', { class: 'jay-sys-ic', 'aria-hidden': 'true' }, icon(failed ? 'alert-triangle' : 'repeat', 15)),
             h('span', { class: 'jay-sys-main' }, h('span', { class: 'jay-sys-name' }, a.title), scheduleCell(a)),
-            UI.spark(cadence(a), { hue: failed ? 'red' : null, label: 'Scheduled runs, last 14 days' + (failed ? ', last run failed' : '') }),
+            UI.spark(runs, { label: 'Last 14 days: ' + fmt.plural(ran, 'run') + (fails ? ', ' + fails + ' failed' : '') }),
             UI.dotPill(failed ? 'Failed' : 'OK', failed ? 'red' : 'green'));
         })),
         empty: { title: 'No automations yet.', compact: true },
@@ -387,12 +422,12 @@
           who: a.actor ? { id: a.actor, name: a.actor === 'jay' ? 'Jay' : (a.personName || a.actor) } : null,
           icon: a.icon || 'automations', hue: a.hue || (a.level === 'critical' ? 'red' : 'neutral'),
           verb: a.verb || a.title, target: a.verb ? a.target : null,
-          context: list(a.context), time: agoLabel(a.at), attachment: a.attachment || null,
+          context: list(a.context), time: fmt.short(a.at), attachment: a.attachment || null,
           level: a.level, unread: a.level === 'critical',
         })),
         empty: { title: 'No recent events.', compact: true },
       });
-      return () => { w1.dispose(); w2.dispose(); w3.dispose(); };
+      return () => { offSource(); themeMo.disconnect(); w1.dispose(); w2.dispose(); w3.dispose(); };
     },
   };
 })();

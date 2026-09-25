@@ -5,7 +5,9 @@
    v2 look: a floating panel with a lime "J", "Jay ● Preview" and
    "Personal | Main" crumbs; right-aligned surface-3 user bubbles,
    prose-first Jay turns, outlined quick pills (lime when active) and an
-   inset composer with attach / mic / context chips and a lime send square. */
+   inset composer with attach / mic / context chips and a lime send square.
+   Shortcuts elsewhere ("Ask Jay", quick chips) go through JAY.chat.prefill so
+   they never overwrite what the user typed. */
 (function () {
   'use strict';
   const JAY = window.JAY;
@@ -28,7 +30,24 @@
   const CONTEXTS = ['Personal', 'Work', 'Business'];
 
   // Draft + active conversation are shared so "expand" keeps what you typed.
-  const shared = { draft: '', intent: null, convId: 'main', context: JAY.storage.get('context', 'Personal') };
+  // draftSource: 'user' (typed or edited here) or 'shortcut' (an untouched
+  // "Ask Jay" prefill, which the next shortcut may replace).
+  const shared = { draft: '', draftSource: null, intent: null, convId: 'main', context: JAY.storage.get('context', 'Personal') };
+  const live = new Set(); // mounted Talk components, newest last
+
+  // The signed-in user's first name, or '' while JAY only knows a placeholder.
+  function firstName() {
+    const u = JAY.me;
+    if (!u || !u.name || u.id === 'me') return '';
+    return String(u.name).trim().split(/\s+/)[0] || '';
+  }
+  function hello() { const n = firstName(); return fmt.greeting() + (n ? ', ' + n : ''); }
+  // A data result is usable only when it is a real value, not a {__state} marker.
+  function usable(v) { return !!v && typeof v === 'object' && !v.__state; }
+  const CANT_REACH_TASKS = {
+    text: 'I can’t reach your tasks right now. Check System → Preview tools or try again.',
+    link: { label: 'Open System', route: '#/system' },
+  };
 
   /* ── Local mock responder ───────────────────────────────────────────── */
   function parseWhen(text) {
@@ -98,18 +117,26 @@
       return { text: 'I’ll research “' + cleanSubject(text, [/^research:?\s*/i]) + '” once I’m connected to Hermes. In this preview nothing leaves your browser.' };
     }
     if (/\b(focus|priorit\w*|today|my day)\b/.test(lower) || /\bwhat\b.*\b(next|now)\b/.test(lower)) {
-      const [counts, summary, attention] = await Promise.all([JAY.data.getTaskCounts(), JAY.data.getTodaySummary(), JAY.data.getAttentionItems()]);
-      const next = summary.next ? ' Next up: ' + summary.next.title + ' at ' + fmt.time(summary.next.at) + '.' : '';
-      const top = attention[0] ? ' Most urgent: ' + attention[0].title.charAt(0).toLowerCase() + attention[0].title.slice(1) + '.' : '';
+      // Each source may fail or answer {__state}; only the task counts are essential.
+      const soft = (p) => Promise.resolve().then(() => p()).catch(() => null);
+      const [counts, summary, attention] = await Promise.all([
+        soft(() => JAY.data.getTaskCounts()), soft(() => JAY.data.getTodaySummary()), soft(() => JAY.data.getAttentionItems())]);
+      if (!usable(counts) || !Number.isFinite(counts.today) || !Number.isFinite(counts.overdue)) return CANT_REACH_TASKS;
+      const nextItem = usable(summary) && summary.next && summary.next.title ? summary.next : null;
+      const next = nextItem ? ' Next up: ' + nextItem.title + ' at ' + fmt.time(nextItem.at) + '.' : '';
+      const first = Array.isArray(attention) ? attention.find((a) => a && a.title) : null;
+      const top = first ? ' Most urgent: ' + first.title.charAt(0).toLowerCase() + first.title.slice(1) + '.' : '';
       return { text: 'You have ' + fmt.plural(counts.today, 'task') + ' due today and ' + fmt.plural(counts.overdue, 'overdue item') + '.' + top + next };
     }
     if (/\b(overdue|late|slipped|behind)\b/.test(lower)) {
-      const tasks = await JAY.data.getTasks({ due: 'overdue' });
+      let tasks = null;
+      try { tasks = await JAY.data.getTasks({ due: 'overdue' }); } catch (_) { tasks = null; }
+      if (!Array.isArray(tasks)) return CANT_REACH_TASKS;
       if (!tasks.length) return { text: 'Nothing is overdue. You’re caught up.' };
       return { text: 'Overdue: ' + tasks.map((t) => t.title + ' (' + fmt.due(t.due).toLowerCase() + ')').join('; ') + '.', link: { label: 'Show overdue', route: '#/tasks?due=overdue' } };
     }
     if (/^(hi|hey|hello|good (morning|afternoon|evening))\b/.test(lower)) {
-      return { text: fmt.greeting() + ', Pat. What should we take care of?' };
+      return { text: hello() + '. What should we take care of?' };
     }
     return { text: 'Preview mode: I’m not connected to Hermes yet, so I can’t act on this. In the live version this goes to your Hermes agent with your ' + shared.context + ' context.' };
   }
@@ -122,8 +149,15 @@
     let busy = false;
     let listening = null;
     const attachments = [];
+    // Below 1024px the focus view hides its conversation tree, so the
+    // "Personal | Main" control becomes the conversation switcher.
+    const mqNoTree = window.matchMedia('(max-width: 1023.98px)');
+    const switcher = () => o.mode === 'focus' && mqNoTree.matches;
 
-    const contextBtn = h('button', { type: 'button', class: 'jay-talk-context', 'aria-haspopup': 'menu', onclick: (e) => openContextMenu(e.currentTarget) });
+    const contextBtn = h('button', {
+      type: 'button', class: 'jay-talk-context', 'aria-haspopup': 'menu',
+      onclick: (e) => { if (switcher()) openConversations(); else openContextMenu(e.currentTarget); },
+    });
     const previewPill = JAY.ui.dotPill('Preview', 'lime');
     previewPill.classList.add('jay-talk-pill');
     previewPill.title = 'Replies are generated locally. Nothing is sent to Hermes in this preview.';
@@ -138,7 +172,7 @@
     const head = h('header', { class: 'jay-talk-head' },
       o.mode === 'focus' ? h('button', { type: 'button', class: 'jay-icon-btn jay-talk-back', 'aria-label': 'Back', onclick: () => { saveDraft(); if (history.length > 1) history.back(); else location.hash = '#/home'; } }, icon('arrow-left', 20)) : null,
       h('div', { class: 'jay-talk-id' },
-        JAY.ui.avatar('Jay', { id: 'jay', size: 'lg', decorative: true }),
+        JAY.ui.avatar('Jay', { id: 'jay', size: 'md', decorative: true }),
         h('div', { class: 'jay-talk-titles' },
           h('div', { class: 'jay-talk-name' }, h('h2', null, 'Jay'), previewPill),
           contextBtn)),
@@ -202,16 +236,20 @@
         b.parentElement.hidden = !!sideQuery && !label.includes(sideQuery);
       });
     }
-    async function renderSide() {
-      if (o.mode !== 'focus') return;
-      const my = ++sideSeq;
+    // Recent JAY conversations (Hermes sessions open in Hermes chat instead),
+    // plus the open one when it is too new to be listed yet.
+    async function conversationList() {
       let sessions = [];
       try { const r = await JAY.data.getRecentSessions(); sessions = Array.isArray(r) ? r : []; } catch (_) { sessions = []; }
-      if (my !== sideSeq) return;
-      const mine = sessions.filter((c) => c.source !== 'hermes');
+      const mine = sessions.filter((c) => c && c.source !== 'hermes' && c.id !== 'main');
       if (convId !== 'main' && conversation && !mine.some((c) => c.id === convId)) {
         mine.unshift({ id: convId, title: conversation.title || 'New conversation' });
       }
+      return mine;
+    }
+    // The tree is always the layout's first child — the shared .has-side rule
+    // hides the first child below 1024px, so the thread must never be it.
+    function placeSide(mine) {
       const next = JAY.ui.sideNav({
         label: 'Conversations',
         search: { placeholder: 'Search conversations', onInput: filterSide },
@@ -224,11 +262,18 @@
       next.classList.add('jay-talk-side');
       const searchInput = side ? side.querySelector('input') : null;
       const hadFocus = searchInput && document.activeElement === searchInput;
-      if (side && side.isConnected) side.replaceWith(next); else root.insertBefore(next, el);
+      if (side && side.parentNode === root) root.replaceChild(next, side); else root.insertBefore(next, el);
       side = next;
       const input = side.querySelector('input');
       if (input && sideQuery) { input.value = sideQuery; filterSide(sideQuery); }
       if (hadFocus && input) input.focus();
+    }
+    async function renderSide() {
+      if (o.mode !== 'focus') return;
+      const my = ++sideSeq;
+      const mine = await conversationList();
+      if (my !== sideSeq) return;
+      placeSide(mine);
     }
 
     /* ── behaviours ── */
@@ -239,7 +284,11 @@
       textarea.style.height = Math.min(max, textarea.scrollHeight) + 'px';
       sendBtn.disabled = !textarea.value.trim() || busy;
     }
-    textarea.addEventListener('input', () => { autosize(); shared.draft = textarea.value; });
+    textarea.addEventListener('input', () => {
+      autosize();
+      shared.draft = textarea.value;
+      shared.draftSource = textarea.value.trim() ? 'user' : null;
+    });
     textarea.addEventListener('keydown', (e) => {
       const coarse = window.matchMedia('(pointer: coarse)').matches;
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !coarse) { e.preventDefault(); send(); }
@@ -276,18 +325,73 @@
       textarea.focus({ preventScroll: true });
     }
 
+    function setContext(c) {
+      if (!CONTEXTS.includes(c)) return;
+      shared.context = c;
+      JAY.storage.set('context', c);
+      updateHeader();
+      composerContext.querySelector('.jay-chip-label').textContent = c;
+      JAY.emit('context', c);
+    }
     function openContextMenu(anchor) {
       JAY.ui.menu(anchor, CONTEXTS.map((c) => ({
         label: c, icon: c === 'Personal' ? 'user' : (c === 'Work' ? 'server' : 'building'), active: c === shared.context,
         hint: c === shared.context ? 'Current' : '',
-        run: () => { shared.context = c; JAY.storage.set('context', c); updateHeader(); composerContext.querySelector('.jay-chip-label').textContent = c; JAY.emit('context', c); },
+        run: () => setContext(c),
       })), { label: 'Context' });
+    }
+
+    // Phones and tablets: the conversation tree as a sheet — search, Main,
+    // recent conversations, a new one, and the context the next reply uses.
+    function openConversations() {
+      const listEl = h('div', { class: 'jay-convs-list' }, JAY.ui.state('loading', { rows: 4 }));
+      const searchId = JAY.nextId('convs-search');
+      const input = h('input', { id: searchId, class: 'jay-input is-search is-inset', type: 'search', placeholder: 'Search conversations', 'aria-label': 'Search conversations', autocomplete: 'off' });
+      const ctxLabelId = JAY.nextId('convs-ctx');
+      const seg = JAY.ui.segmented(CONTEXTS.map((c) => [c, c]), shared.context, (c) => setContext(c), 'Context', { full: true });
+      seg.setAttribute('aria-labelledby', ctxLabelId);
+      seg.removeAttribute('aria-label');
+      let convs = null;
+      let panel = null;
+      const pick = (id) => { if (panel) panel.close(); if (id !== convId) load(id); };
+      const row = (c, ic) => {
+        const on = c.id === convId;
+        return h('li', null, h('button', {
+          type: 'button', class: ['jay-side-item', on ? 'is-active' : ''], 'aria-current': on ? 'true' : null, onclick: () => pick(c.id),
+        }, icon(ic, 16, 'jay-side-icon'), h('span', { class: 'jay-side-label' }, c.title || 'Untitled'),
+        c.updatedAt ? h('span', { class: 'jay-convs-time' }, fmt.ago(c.updatedAt)) : null));
+      };
+      const section = (title, rows) => h('div', { class: 'jay-side-section' },
+        h('div', { class: 'jay-side-title' }, title), h('ul', { class: 'jay-side-list' }, rows));
+      function paint() {
+        if (!convs) return;
+        const q = input.value.trim().toLowerCase();
+        const match = (c) => !q || String(c.title || '').toLowerCase().includes(q);
+        const pinned = [{ id: 'main', title: 'Main' }].filter(match);
+        const recent = convs.filter(match);
+        mount(listEl,
+          pinned.length ? section('Pinned', pinned.map((c) => row(c, 'message-circle'))) : null,
+          recent.length ? section('Recent', recent.map((c) => row(c, 'chat'))) : null,
+          !pinned.length && !recent.length ? JAY.ui.state('empty', { icon: 'search', title: 'No conversations match.', compact: true }) : null);
+      }
+      input.addEventListener('input', paint);
+      const body = h('div', { class: 'jay-convs' },
+        h('div', { class: 'jay-convs-ctx' }, h('div', { class: 'jay-convs-label', id: ctxLabelId }, 'Context'), seg),
+        h('div', { class: 'jay-search jay-convs-search' }, icon('search', 15), input),
+        listEl);
+      const footer = h('button', { type: 'button', class: 'jay-btn is-primary is-block', onclick: () => { if (panel) panel.close(); newConversation(); } }, icon('plus', 16), 'New conversation');
+      panel = JAY.ui.openPanel({ eyebrow: 'Talk', title: 'Conversations', body, footer });
+      conversationList().then((list) => { convs = list; if (listEl.isConnected) paint(); });
     }
 
     function updateHeader() {
       const title = conversation ? conversation.title : 'Main';
       mount(contextBtn, h('span', null, shared.context), h('span', { class: 'jay-sep', 'aria-hidden': 'true' }, '|'), h('span', { class: 'jay-talk-conv' }, title), icon('chevron-down', 14));
-      contextBtn.setAttribute('aria-label', 'Context: ' + shared.context + ', conversation: ' + title + '. Change context');
+      const sw = switcher();
+      contextBtn.setAttribute('aria-haspopup', sw ? 'dialog' : 'menu');
+      contextBtn.setAttribute('aria-label', sw
+        ? 'Conversation: ' + title + ', context: ' + shared.context + '. Switch conversation or context'
+        : 'Context: ' + shared.context + ', conversation: ' + title + '. Change context');
     }
 
     function messageNode(m) {
@@ -306,7 +410,7 @@
     function emptyNode() {
       return h('div', { class: 'jay-talk-empty' },
         JAY.ui.avatar('Jay', { id: 'jay', size: 'xl', decorative: true }),
-        h('div', { class: 'jay-talk-greeting' }, fmt.greeting() + ', Pat.'),
+        h('div', { class: 'jay-talk-greeting' }, hello() + '.'),
         h('div', { class: 'jay-talk-prompt' }, 'What should we take care of?'),
         h('div', { class: 'jay-talk-suggest' },
           ['What should I focus on today?', 'Remind me to call the bank at 4pm', 'What’s overdue?'].map((s) =>
@@ -336,7 +440,10 @@
       mount(thread, JAY.ui.state('loading', { rows: 3 }));
       try {
         conversation = await JAY.data.getConversation(convId);
-        if (!conversation) { conversation = { id: convId, title: 'Main', messages: [] }; }
+        // A conversation that no longer exists (demo reset, stale link) falls back to Main.
+        if (!usable(conversation) && convId !== 'main') { load('main'); return; }
+        if (!usable(conversation)) { conversation = { id: convId, title: 'Main', messages: [] }; }
+        if (!Array.isArray(conversation.messages)) conversation.messages = [];
       } catch (err) {
         mount(thread, JAY.ui.state('error', { title: 'Couldn’t load this conversation.', action: { label: 'Retry', icon: 'refresh', run: () => load(convId) } }));
         return;
@@ -372,6 +479,7 @@
       const intent = shared.intent;
       textarea.value = '';
       shared.draft = '';
+      shared.draftSource = null;
       autosize();
       prime(null);
       if (attachments.length) { attachments.splice(0, attachments.length); renderAttachments(); }
@@ -412,7 +520,32 @@
       if (announce) JAY.ui.toast('Voice uses Hermes voice once JAY is connected. Nothing was recorded.', { icon: 'mic' });
     }
 
+    // Store changed underneath (another view, a demo reset): follow it unless
+    // this component is mid-send, when it already holds the newest messages.
+    async function syncFromStore() {
+      if (busy || !conversation) return;
+      let fresh = null;
+      try { fresh = await JAY.data.getConversation(convId); } catch (_) { return; }
+      if (busy) return;
+      if (!usable(fresh)) { if (convId !== 'main') load('main'); return; }
+      const msgs = Array.isArray(fresh.messages) ? fresh.messages : [];
+      if (msgs.length === conversation.messages.length && fresh.title === conversation.title) return;
+      conversation = Object.assign({}, fresh, { messages: msgs });
+      updateHeader();
+      renderThread();
+      renderSide();
+    }
+
+    function focusComposer() {
+      textarea.focus({ preventScroll: true });
+      const end = textarea.value.length;
+      try { textarea.setSelectionRange(end, end); } catch (_) { /* not focusable yet */ }
+    }
+
     /* ── init ── */
+    // Focus view: the tree goes in synchronously (recent items fill in once
+    // loaded), so the thread is visible — and focusable — from the first frame.
+    if (o.mode === 'focus') placeSide([]);
     textarea.value = shared.draft || '';
     autosize();
     if (shared.intent) prime(shared.intent); else textarea.placeholder = DEFAULT_PLACEHOLDER;
@@ -421,22 +554,80 @@
     const offCtx = JAY.on('context', () => { updateHeader(); composerContext.querySelector('.jay-chip-label').textContent = shared.context; });
     const offOpen = JAY.on('chat:open', (id) => load(id));
     const offPrime = JAY.on('chat:prime', (intent) => prime(intent));
+    const offDraft = JAY.on('chat:draft', (p) => {
+      textarea.value = shared.draft || '';
+      autosize();
+      if (p && p.intent !== undefined) prime(shared.intent);
+    });
+    const offChat = JAY.on('data:chat', () => { syncFromStore(); });
     const offSessions = o.mode === 'focus' ? JAY.on('data:sessions', () => renderSide()) : () => {};
+    const onTreeMq = () => updateHeader();
+    if (typeof mqNoTree.addEventListener === 'function') mqNoTree.addEventListener('change', onTreeMq);
 
-    return {
+    const api = {
       el: root,
-      focus() { textarea.focus({ preventScroll: true }); },
+      focus: focusComposer,
       prime,
       load,
-      destroy() { saveDraft(); stopMic(false); offCtx(); offOpen(); offPrime(); offSessions(); if (resizeObs) resizeObs.disconnect(); sideSeq += 1; },
+      destroy() {
+        saveDraft(); stopMic(false); offCtx(); offOpen(); offPrime(); offDraft(); offChat(); offSessions();
+        if (typeof mqNoTree.removeEventListener === 'function') mqNoTree.removeEventListener('change', onTreeMq);
+        if (resizeObs) resizeObs.disconnect();
+        sideSeq += 1;
+        live.delete(api);
+      },
     };
+    live.add(api);
+    return api;
+  }
+
+  // Put text in the composer for a shortcut ("Ask Jay about …") without losing
+  // what the user typed: an empty or untouched-shortcut draft is replaced, a
+  // user draft gets the text appended on a new line. opts.intent also sets the
+  // mode; an intent-only shortcut clears an untouched shortcut draft, never a
+  // typed one. Returns the resulting draft.
+  function prefill(text, opts) {
+    const o = opts || {};
+    const add = typeof text === 'string' ? text : '';
+    const cur = String(shared.draft || '');
+    const typed = !!cur.trim() && shared.draftSource !== 'shortcut';
+    if (add) {
+      if (typed) { shared.draft = cur.replace(/\s+$/, '') + '\n' + add; shared.draftSource = 'user'; }
+      else { shared.draft = add; shared.draftSource = 'shortcut'; }
+    } else if (o.intent && !typed) {
+      shared.draft = '';
+      shared.draftSource = null;
+    }
+    const detail = {};
+    if (o.intent !== undefined) {
+      shared.intent = o.intent && INTENTS[o.intent] ? o.intent : null;
+      detail.intent = shared.intent;
+    }
+    JAY.emit('chat:draft', detail);
+    return shared.draft;
+  }
+
+  // Focus the newest mounted composer (caret at the end). False when none is on screen.
+  function focusLive() {
+    const list = Array.from(live).filter((c) => c.el && c.el.isConnected);
+    const c = list[list.length - 1];
+    if (!c) return false;
+    c.focus();
+    return true;
   }
 
   JAY.chat = {
     create,
     shared,
+    prefill,
+    focus: focusLive,
     open(id) { shared.convId = id; JAY.emit('chat:open', id); },
-    prime(intent) { shared.intent = intent; JAY.emit('chat:prime', intent); },
+    // An intent shortcut (Task, Reminder …) replaces an untouched shortcut draft.
+    prime(intent) {
+      if (intent && shared.draftSource === 'shortcut') { shared.draft = ''; shared.draftSource = null; JAY.emit('chat:draft', {}); }
+      shared.intent = intent;
+      JAY.emit('chat:prime', intent);
+    },
     respond,
   };
 })();

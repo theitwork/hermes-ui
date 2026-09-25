@@ -62,6 +62,7 @@
       n += 1;
       return Object.assign({
         id: 'task-' + String(n).padStart(3, '0'),
+        stream: null,
         tags: [],
         assignee: 'pat',
         description: '',
@@ -72,37 +73,37 @@
 
     const tasks = [
       // Due today
-      task({ title: 'Finalize company proposal', projectId: 'business-ops', status: 'in_progress', priority: 'high', due: at(now, 0, 14, 0), tags: ['proposal'], description: 'Pricing table, scope and timeline for the Khoury Group managed-services proposal. Needs final read before sending.', updatedAt: minutesAgo(now, 55) }),
-      task({ title: 'Review Hermes voice bridge', projectId: 'hermes-jay', status: 'next', priority: 'medium', due: at(now, 0, 17, 0), tags: ['voice'], description: 'Check latency and wake-word handling on the latest bridge build.' }),
-      task({ title: 'Schedule supplier call', projectId: 'business-ops', status: 'next', priority: 'medium', due: at(now, 0, 12, 0), tags: ['suppliers'] }),
-      task({ title: 'Pay electricity bill', projectId: 'home', status: 'next', priority: 'low', due: at(now, 0, 18, 0), tags: ['bills'] }),
+      task({ title: 'Finalize company proposal', projectId: 'business-ops', stream: 'Proposals', status: 'in_progress', priority: 'high', due: at(now, 0, 14, 0), tags: ['proposal'], description: 'Pricing table, scope and timeline for the Khoury Group managed-services proposal. Needs final read before sending.', updatedAt: minutesAgo(now, 55) }),
+      task({ title: 'Review Hermes voice bridge', projectId: 'hermes-jay', stream: 'Voice bridge', status: 'next', priority: 'medium', due: at(now, 0, 17, 0), tags: ['voice'], description: 'Check latency and wake-word handling on the latest bridge build.' }),
+      task({ title: 'Schedule supplier call', projectId: 'business-ops', stream: 'Suppliers', status: 'next', priority: 'medium', due: at(now, 0, 12, 0), tags: ['suppliers'] }),
+      task({ title: 'Pay electricity bill', projectId: 'home', stream: 'Bills', status: 'next', priority: 'low', due: at(now, 0, 18, 0), tags: ['bills'] }),
       // Overdue
-      task({ title: 'Send proposal to ABC Logistics', projectId: 'business-ops', status: 'in_progress', priority: 'urgent', due: at(now, -1, 17, 0), tags: ['proposal', 'client'], description: 'Revised proposal after Tuesday’s call. They asked for a phased rollout option.', assignee: 'pat' }),
-      task({ title: 'Follow up with Tony on hardware quote', projectId: 'business-ops', status: 'next', priority: 'high', due: at(now, -2, 12, 0), tags: ['suppliers'], description: 'Quote for 12 laptops and two firewalls. Need it before the ABC proposal goes out.' }),
+      task({ title: 'Send proposal to ABC Logistics', projectId: 'business-ops', stream: 'Proposals', status: 'in_progress', priority: 'urgent', due: at(now, -1, 17, 0), tags: ['proposal', 'client'], description: 'Revised proposal after Tuesday’s call. They asked for a phased rollout option.', assignee: 'pat' }),
+      task({ title: 'Follow up with Tony on hardware quote', projectId: 'business-ops', stream: 'Suppliers', status: 'next', priority: 'high', due: at(now, -2, 12, 0), tags: ['suppliers'], description: 'Quote for 12 laptops and two firewalls. Need it before the ABC proposal goes out.' }),
       // In progress
-      task({ title: 'Homepage copy review', projectId: 'company-website', status: 'in_progress', priority: 'medium', due: at(now, 2, 12, 0), tags: ['content'], assignee: 'rana' }),
-      task({ title: 'Configure Hermes backup automation', projectId: 'hermes-jay', status: 'in_progress', priority: 'high', due: at(now, 1, 12, 0), tags: ['ops'], description: 'Nightly snapshot of Hermes state to object storage with 14-day retention.' }),
-      task({ title: 'Mobile layout for JAY', projectId: 'hermes-jay', status: 'in_progress', priority: 'medium', due: at(now, 4, 12, 0), tags: ['design'], assignee: 'jay' }),
-      task({ title: 'Prepare monthly expenses', projectId: 'business-ops', status: 'in_progress', priority: 'medium', due: at(now, 3, 12, 0), tags: ['finance'], assignee: 'pat' }),
+      task({ title: 'Homepage copy review', projectId: 'company-website', stream: 'Content', status: 'in_progress', priority: 'medium', due: at(now, 2, 12, 0), tags: ['content'], assignee: 'rana' }),
+      task({ title: 'Configure Hermes backup automation', projectId: 'hermes-jay', stream: 'Ops', status: 'in_progress', priority: 'high', due: at(now, 1, 12, 0), tags: ['ops'], description: 'Nightly snapshot of Hermes state to object storage with 14-day retention.' }),
+      task({ title: 'Mobile layout for JAY', projectId: 'hermes-jay', stream: 'Home UI', status: 'in_progress', priority: 'medium', due: at(now, 4, 12, 0), tags: ['design'], assignee: 'jay' }),
+      task({ title: 'Prepare monthly expenses', projectId: 'business-ops', stream: 'Finance', status: 'in_progress', priority: 'medium', due: at(now, 3, 12, 0), tags: ['finance'], assignee: 'pat' }),
       // Waiting
-      task({ title: 'Renewal quote approval', projectId: 'business-ops', status: 'waiting', priority: 'high', due: at(now, 1, 12, 0), tags: ['client'], assignee: 'sarah', description: 'Northwind renewal — waiting on Sarah’s sign-off.' }),
-      task({ title: 'Website hosting migration', projectId: 'company-website', status: 'waiting', priority: 'medium', due: at(now, 5, 12, 0), tags: ['infra'], assignee: 'rana' }),
-      task({ title: 'Plumber visit confirmation', projectId: 'home', status: 'waiting', priority: 'low', due: at(now, 2, 12, 0), tags: [] }),
+      task({ title: 'Renewal quote approval', projectId: 'business-ops', stream: 'Finance', status: 'waiting', priority: 'high', due: at(now, 1, 12, 0), tags: ['client'], assignee: 'sarah', description: 'Northwind renewal — waiting on Sarah’s sign-off.' }),
+      task({ title: 'Website hosting migration', projectId: 'company-website', stream: 'Hosting', status: 'waiting', priority: 'medium', due: at(now, 5, 12, 0), tags: ['infra'], assignee: 'rana' }),
+      task({ title: 'Plumber visit confirmation', projectId: 'home', stream: 'Maintenance', status: 'waiting', priority: 'low', due: at(now, 2, 12, 0), tags: [] }),
       // Next / inbox
-      task({ title: 'Set up SSL monitoring for website', projectId: 'company-website', status: 'next', priority: 'high', due: at(now, 3, 12, 0), tags: ['infra'] }),
-      task({ title: 'Draft JAY attention rules', projectId: 'hermes-jay', status: 'next', priority: 'medium', due: at(now, 6, 12, 0), tags: ['design'], assignee: 'jay' }),
-      task({ title: 'Collect testimonials for website', projectId: 'company-website', status: 'next', priority: 'low', due: at(now, 8, 12, 0), tags: ['content'] }),
-      task({ title: 'Renew car insurance', projectId: 'personal', status: 'next', priority: 'medium', due: at(now, 9, 12, 0), tags: ['admin'] }),
-      task({ title: 'Pick up dry cleaning', projectId: 'personal', status: 'next', priority: 'low', due: at(now, 1, 18, 0), tags: ['errands'] }),
-      task({ title: 'Book dentist appointment', projectId: 'personal', status: 'inbox', priority: 'low', due: null, tags: ['health'] }),
-      task({ title: 'Gym plan for next month', projectId: 'personal', status: 'inbox', priority: 'low', due: null, tags: ['health'] }),
-      task({ title: 'Research ergonomic desk chairs', projectId: 'personal', status: 'inbox', priority: 'low', due: null, tags: ['research'] }),
-      task({ title: 'Order replacement water filter', projectId: 'home', status: 'inbox', priority: 'low', due: null, tags: ['errands'] }),
+      task({ title: 'Set up SSL monitoring for website', projectId: 'company-website', stream: 'Hosting', status: 'next', priority: 'high', due: at(now, 3, 12, 0), tags: ['infra'] }),
+      task({ title: 'Draft JAY attention rules', projectId: 'hermes-jay', stream: 'Home UI', status: 'next', priority: 'medium', due: at(now, 6, 12, 0), tags: ['design'], assignee: 'jay' }),
+      task({ title: 'Collect testimonials for website', projectId: 'company-website', stream: 'Content', status: 'next', priority: 'low', due: at(now, 8, 12, 0), tags: ['content'] }),
+      task({ title: 'Renew car insurance', projectId: 'personal', stream: 'Admin', status: 'next', priority: 'medium', due: at(now, 9, 12, 0), tags: ['admin'] }),
+      task({ title: 'Pick up dry cleaning', projectId: 'personal', stream: 'Errands', status: 'next', priority: 'low', due: at(now, 1, 18, 0), tags: ['errands'] }),
+      task({ title: 'Book dentist appointment', projectId: 'personal', stream: 'Health', status: 'inbox', priority: 'low', due: null, tags: ['health'] }),
+      task({ title: 'Gym plan for next month', projectId: 'personal', stream: 'Health', status: 'inbox', priority: 'low', due: null, tags: ['health'] }),
+      task({ title: 'Research ergonomic desk chairs', projectId: 'personal', stream: 'Errands', status: 'inbox', priority: 'low', due: null, tags: ['research'] }),
+      task({ title: 'Order replacement water filter', projectId: 'home', stream: 'Maintenance', status: 'inbox', priority: 'low', due: null, tags: ['errands'] }),
       // Done
-      task({ title: 'Migrate Hermes to OCI', projectId: 'hermes-jay', status: 'done', priority: 'high', due: at(now, -3, 12, 0), tags: ['ops'], updatedAt: daysAgo(now, 3, 16) }),
-      task({ title: 'Approve homepage wireframes', projectId: 'company-website', status: 'done', priority: 'medium', due: at(now, -4, 12, 0), tags: ['design'], updatedAt: daysAgo(now, 4, 11) }),
-      task({ title: 'File quarterly VAT return', projectId: 'business-ops', status: 'done', priority: 'high', due: at(now, -5, 12, 0), tags: ['finance'], assignee: 'karim', updatedAt: daysAgo(now, 5, 15) }),
-      task({ title: 'Fix kitchen tap', projectId: 'home', status: 'done', priority: 'low', due: at(now, -6, 12, 0), tags: [], updatedAt: daysAgo(now, 6, 18) }),
+      task({ title: 'Migrate Hermes to OCI', projectId: 'hermes-jay', stream: 'Ops', status: 'done', priority: 'high', due: at(now, -3, 12, 0), tags: ['ops'], updatedAt: daysAgo(now, 3, 16) }),
+      task({ title: 'Approve homepage wireframes', projectId: 'company-website', stream: 'Website Design', status: 'done', priority: 'medium', due: at(now, -4, 12, 0), tags: ['design'], updatedAt: daysAgo(now, 4, 11) }),
+      task({ title: 'File quarterly VAT return', projectId: 'business-ops', stream: 'Finance', status: 'done', priority: 'high', due: at(now, -5, 12, 0), tags: ['finance'], assignee: 'karim', updatedAt: daysAgo(now, 5, 15) }),
+      task({ title: 'Fix kitchen tap', projectId: 'home', stream: 'Maintenance', status: 'done', priority: 'low', due: at(now, -6, 12, 0), tags: [], updatedAt: daysAgo(now, 6, 18) }),
     ];
 
     // Calendar, reminders, automations and follow-ups for the Today stream.
@@ -326,7 +327,7 @@
       'ac-3': { actor: 'pat', verb: 'completed', target: 'Migrate Hermes to OCI', context: ['Ops'] },
       'ac-4': { actor: 'rana', verb: 'uploaded a file in', target: 'Homepage', context: ['Website Design'], attachment: { name: 'homepage-v3.fig', kind: 'fig', meta: 'Figma · 4.2 MB' } },
       'ac-5': { actor: 'pat', verb: 'approved', target: 'Homepage wireframes', context: ['Website Design'] },
-      'ac-6': { actor: 'sarah', verb: 'sent', target: 'Northwind renewal quote', context: ['Finance'], attachment: { name: 'Northwind-renewal-2027.pdf', kind: 'pdf', meta: 'PDF · 240 KB' } },
+      'ac-6': { actor: 'sarah', verb: 'requests approval for', target: 'Northwind renewal quote', attentionId: 'at-4', context: ['Finance'], attachment: { name: 'Northwind-renewal-2027.pdf', kind: 'pdf', meta: 'PDF · 240 KB' } },
       'ac-7': { actor: 'pat', verb: 'updated the draft of', target: 'Khoury proposal', context: ['Proposals'], attachment: { name: 'Khoury-proposal-draft.docx', kind: 'doc', meta: 'Word · 212 KB' } },
       'ac-8': { actor: 'karim', verb: 'filed', target: 'Quarterly VAT return', context: ['Finance'] },
       'ac-9': { actor: 'jay', verb: 'summarised', target: 'Budget planning', context: ['Admin'], quote: 'Eleven subscriptions, about $214 a month. Two storage plans and two music services overlap.' },
@@ -339,7 +340,7 @@
       { id: 'ac-13', projectId: 'business-ops', at: daysAgo(now, 4, 14), text: 'Tony sent supplier quotes.', actor: 'tony', verb: 'uploaded a file in', target: 'Supplier quotes', context: ['Suppliers'], attachment: { name: 'supplier-quotes.xlsx', kind: 'xls', meta: 'Excel · 37 KB' } }
     );
 
-    return { now: now.toISOString(), user:{ id: 'pat', name: 'Pat', context: 'Personal', workspace: 'Main' }, people, projects, tasks, agenda, attention, conversations, notes, files, activity, automations, system, integrations };
+    return { now: now.toISOString(), user: { id: 'pat', name: 'Pat', context: 'Personal', workspace: 'Main' }, people, projects, tasks, agenda, attention, conversations, notes, files, activity, automations, system, integrations };
   }
 
   JAY.mock = { build };
