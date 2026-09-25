@@ -254,7 +254,7 @@ html[data-jay-mode="hermes"] .jay-skip { display: none; }
   padding: 0 12px 0 18px; /* title shares the panel heads' 18px left edge */
   overflow: visible;
 }
-.jay-appbar-brand { display: none; }
+.jay-appbar-brand, .jay-appbar-back { display: none; }
 .jay-header-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
 .jay-header-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .jay-header-title {
@@ -521,7 +521,7 @@ html[data-jay-mode="hermes"] .jay-skip { display: none; }
 /* ── JAY mode: Hermes stays mounted (state, streams, timers intact) but is not
    painted or focusable underneath JAY. ── */
 html[data-jay-mode="jay"] body > .app-titlebar,
-html[data-jay-mode="jay"] body > .layout { visibility: hidden; }
+html[data-jay-mode="jay"] body > .layout { visibility: hidden; overflow: clip; }
 
 /* ── Hermes mode: JAY shrinks to its floating rail; Hermes floats beside it
    as one rounded panel on the same canvas (titlebar + layout). ── */
@@ -635,6 +635,19 @@ html[data-jay-mode="jay"] body > .layout { visibility: hidden; }
     text-overflow: ellipsis;
   }
   .jay-app[data-route="home"] .jay-appbar-title { letter-spacing: 0.08em; font-size: 16px; }
+  /* setHeader({ back }): a chevron before the brand; the chevron's glyph sits
+     on the app bar's 16px edge, so the lime tile moves right by its width. */
+  .jay-appbar-back:not([hidden]) {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 40px;
+    height: 44px;
+    margin: 0 -4px 0 -12px;
+    border-radius: 12px;
+    color: var(--jay-text);
+  }
+  .jay-appbar-back:active { background: var(--jay-hover); }
   .jay-header-main { display: none; }
   .jay-header-tools { gap: 6px; }
   .jay-header-tools .jay-header-search,

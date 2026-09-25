@@ -32,11 +32,13 @@
   const SORT_OPTIONS = [['due', 'Due date'], ['priority', 'Priority'], ['status', 'Status'], ['updated', 'Last update'], ['title', 'Title']];
   // Fallback names until JAY.data.getPeople() answers (and if it never does).
   const ASSIGNEES = [['pat', 'Pat'], ['jay', 'Jay'], ['rana', 'Rana Saad'], ['sarah', 'Sarah Mitchell'], ['karim', 'Karim Nassar'], ['tony', 'Tony Haddad']];
-  // Project tones → contrast-safe tag hues (tones are for dots and tiles).
-  // One table for every screen lives in JAY.ui.toneHue; this is only a fallback.
-  const TONE_HUE = { 1: 'lime', 2: 'blue', 3: 'orange', 4: 'yellow', 5: 'purple' };
-  function toneHue(tone) { return typeof UI.toneHue === 'function' ? UI.toneHue(tone) : (TONE_HUE[Math.round(Number(tone))] || 'neutral'); }
-  function toneClass(tone) { const n = Math.round(Number(tone)); return n >= 1 && n <= 5 ? 'is-tone-' + n : ''; }
+  // Side-tree dot for a project tone (1–5): the tone only ever selects a
+  // class, never a style. Tag hues come from JAY.ui.toneHue(project).
+  function toneDot(tone) { const n = Math.round(Number(tone)); return n >= 1 && n <= 5 ? 'tone-' + n : 'neutral'; }
+  // The signed-in user ("you"): JAY.me, or 'pat' until the shell names them
+  // (the shell's placeholder id 'me' is not a person).
+  function meId() { const u = JAY.me; return u && u.id && u.id !== 'me' ? String(u.id) : 'pat'; }
+  function ownerLabel(pe) { return pe.id === meId() ? pe.name + ' (you)' : pe.name; }
   // Kanban drags carry the task id under a private type, so text, links or files
   // dropped from elsewhere never reach setStatus().
   const DRAG_TYPE = 'application/x-jay-task';
@@ -91,11 +93,6 @@
     const st = t.status === 'done' ? 'done' : fmt.dueState(t.due);
     return h('span', { class: ['jay-due', 'is-' + st], title: new Date(t.due).toLocaleString() }, st === 'overdue' ? icon('alert-triangle', 12) : null, fmt.due(t.due));
   }
-  function projectTag(t) {
-    if (!t.project) return h('span', { class: 'jay-muted' }, '—');
-    // The tone only ever selects a class (1–5); it is never written into a style.
-    return h('span', { class: 'jay-proj-tag' }, h('span', { class: ['jay-tone-dot', toneClass(t.project.tone)], 'aria-hidden': 'true' }), t.project.title);
-  }
   function checkToggle(t, onToggle) {
     const done = t.status === 'done';
     return h('button', {
@@ -113,7 +110,7 @@
   function tagItems(t, opts) {
     const o = opts || {};
     const list = [];
-    if (o.project !== false && t.project) list.push({ label: t.project.title, hue: toneHue(t.project.tone) });
+    if (o.project !== false && t.project) list.push({ label: t.project.title, hue: UI.toneHue(t.project) });
     (t.tags || []).forEach((tg) => list.push({ label: titleCase(tg), hue: UI.tagHue(tg) }));
     return list;
   }
@@ -139,7 +136,7 @@
     return { at: t.updatedAt || t.createdAt || new Date().toISOString(), label: ev ? 'Edited' : 'Created' };
   }
   function watchersOf(t) {
-    const ids = Array.isArray(t.watchers) && t.watchers.length ? t.watchers : [t.assignee || 'pat'];
+    const ids = Array.isArray(t.watchers) && t.watchers.length ? t.watchers : [t.assignee || meId()];
     return Array.from(new Set(ids)).map(personOf);
   }
   function countsNode(t, cls) {
@@ -150,13 +147,12 @@
       c ? h('span', { class: 'jay-tcount', title: fmt.plural(c, 'comment') }, icon('comment', 12), h('span', null, String(c)), h('span', { class: 'jay-sr-only' }, c === 1 ? ' comment' : ' comments')) : null,
       a ? h('span', { class: 'jay-tcount', title: fmt.plural(a, 'attachment') }, icon('paperclip', 12), h('span', null, String(a)), h('span', { class: 'jay-sr-only' }, a === 1 ? ' attachment' : ' attachments')) : null);
   }
+  // The shared CRM date cell; .jay-lastev keeps the Tasks sizing (jay-tasks.css).
   function lastEventNode(t) {
     const ev = lastEventOf(t);
-    return h('span', { class: 'jay-lastev', title: new Date(ev.at).toLocaleString() },
-      icon('calendar', 14),
-      h('span', { class: 'jay-lastev-date' }, fmt.dateShort(ev.at)),
-      h('span', { class: 'jay-lastev-sep', 'aria-hidden': 'true' }),
-      h('span', { class: 'jay-lastev-label' }, ev.label));
+    const cell = UI.dateCell(ev.at, ev.label, { title: new Date(ev.at).toLocaleString() });
+    cell.classList.add('jay-lastev');
+    return cell;
   }
 
   /* ── Mutations ──────────────────────────────────────────────────────── */
@@ -190,7 +186,7 @@
     for (const snap of snapshots.slice().reverse()) {
       if (snap.provider && typeof JAY.data.restoreTask === 'function') { await JAY.data.restoreTask(snap.provider); continue; }
       const s = snap.copy;
-      const nt = await JAY.data.createTask({ title: s.title, projectId: s.projectId, status: s.status, priority: s.priority, due: s.due, assignee: s.assignee, tags: s.tags, description: s.description, source: s.source });
+      const nt = await JAY.data.createTask({ title: s.title, projectId: s.projectId, stream: s.stream, status: s.status, priority: s.priority, due: s.due, assignee: s.assignee, tags: s.tags, description: s.description, source: s.source });
       const extra = {};
       RESTORE_FIELDS.forEach((k) => { if (s[k] !== undefined) extra[k] = s[k]; });
       if (nt && nt.id && Object.keys(extra).length) await JAY.data.updateTask(nt.id, extra);
@@ -247,7 +243,7 @@
   async function openTaskForm(task, prefill, opts) {
     const o = opts || {};
     const isNew = !task;
-    const t = Object.assign({ title: '', projectId: 'personal', status: 'inbox', priority: 'medium', due: null, assignee: 'pat', tags: [], description: '', checklist: [] }, prefill || {}, task || {});
+    const t = Object.assign({ title: '', projectId: 'personal', status: 'inbox', priority: 'medium', due: null, assignee: meId(), tags: [], description: '', checklist: [] }, prefill || {}, task || {});
     let projects = [];
     try { projects = await JAY.data.getProjects(); } catch (_) { projects = []; }
     if (!Array.isArray(projects)) projects = [];
@@ -277,24 +273,15 @@
     if (!projectOpts.some(([v]) => v === t.projectId)) projectOpts.unshift([t.projectId, t.project ? t.project.title : 'Personal']);
     const project = select(projectOpts, t.projectId);
     const due = h('input', { class: 'jay-input', type: 'date', value: t.due ? fmt.isoDate(t.due) : '' });
-    const owners = Array.from(people.values()).map((p) => [p.id, p.id === 'pat' ? p.name + ' (you)' : p.name]);
+    const owners = Array.from(people.values()).map((pe) => [pe.id, ownerLabel(pe)]);
+    if (t.assignee && !owners.some(([v]) => v === t.assignee)) owners.unshift([t.assignee, ownerLabel(personOf(t.assignee))]);
     const assignee = select(owners, t.assignee);
     const tags = h('input', { class: 'jay-input', type: 'text', value: (t.tags || []).join(', '), placeholder: 'e.g. client, finance', autocomplete: 'off' });
     const desc = h('textarea', { class: 'jay-input', id: JAY.nextId('tf'), rows: '4', placeholder: 'Notes, context, links…' }, t.description || '');
     const initialPriority = PRIORITY[t.priority] ? t.priority : 'medium';
     let priority = initialPriority;
-    const prioOptions = PRIORITY_KEYS.slice().reverse().map((k) => [k, PRIORITY[k].label]);
-    // One radio group with a single tab stop and arrow keys (JAY.ui.segmented).
-    const prioGroup = typeof UI.segmented === 'function'
-      ? UI.segmented(prioOptions, priority, (v) => { priority = v; }, 'Priority', { full: true })
-      : h('div', { class: 'jay-segmented is-full', role: 'radiogroup', 'aria-label': 'Priority' },
-        prioOptions.map(([k, label]) => h('button', {
-          type: 'button', role: 'radio', 'aria-checked': k === priority ? 'true' : 'false', class: k === priority ? 'is-active' : '',
-          onclick: (e) => {
-            priority = k;
-            prioGroup.querySelectorAll('button').forEach((b) => { const on = b === e.currentTarget; b.classList.toggle('is-active', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); });
-          },
-        }, label)));
+    // One APG radio group: a single tab stop, arrow keys move and select.
+    const prioGroup = UI.segmented(PRIORITY_KEYS.slice().reverse().map((k) => [k, PRIORITY[k].label]), priority, (v) => { priority = v; }, 'Priority', { full: true });
 
     // Subtasks: saved instantly on an existing task, collected for a new one.
     const checklist = (t.checklist || []).map((c) => ({ text: String(c.text || ''), done: !!c.done }));
@@ -371,7 +358,7 @@
       const value = title.value.trim();
       if (!value) { title.focus(); title.setAttribute('aria-invalid', 'true'); return null; }
       return {
-        title: value, status: status.value, projectId: project.value, priority,
+        title: value, status: status.value, projectId: project.value, stream: t.stream || null, priority,
         due: due.value ? new Date(due.value + 'T12:00:00').toISOString() : null, assignee: assignee.value,
         tags: tags.value.split(',').map((s) => s.trim()).filter(Boolean), description: desc.value.trim(),
       };
@@ -615,15 +602,26 @@
     function setSort(key, dir) { f.sort = key; f.dir = validDir(dir) ? dir : DEFAULT_DIR(key); saveUi(); reload(); }
     function currentView() { return VIEWS.find((v) => v.status === f.status && v.due === f.due) || null; }
     function projectById(id) { return projects.find((x) => x.id === id) || null; }
-    // The layout is part of the address, so Reload and Back show the one chosen.
+    // The layout is part of the address, so Reload and Back show the one
+    // chosen: List is the default and leaves no trace, Board adds view=board.
+    // The filters in effect ride along, so a deep link (#/tasks?due=overdue)
+    // survives a layout switch and one the user has since cleared does not.
+    // Written only from the tabs (never while a phone sheet owns the entry).
+    function viewParams() {
+      const q = {};
+      if (f.status !== 'open') q.status = f.status;
+      if (f.projectId !== 'all') q.project = f.projectId;
+      if (f.due !== 'any') q.due = f.due;
+      if (f.owner !== 'any') q.owner = f.owner;
+      if (ui.view !== 'list') q.view = ui.view;
+      return q;
+    }
     function writeViewUrl() {
-      const shell = JAY.shell;
-      const cur = Object.assign({}, shell && shell.state && shell.state.route === 'tasks' && shell.state.params ? shell.state.params : p, { view: ui.view });
-      if (shell && typeof shell.replaceParams === 'function') { shell.replaceParams('tasks', cur); return; }
+      const next = viewParams();
+      if (JAY.shell && typeof JAY.shell.replaceParams === 'function') { JAY.shell.replaceParams('tasks', next); return; }
       try {
-        const q = new URLSearchParams((location.hash.split('?')[1]) || '');
-        q.set('view', ui.view);
-        history.replaceState(history.state, '', '#/tasks?' + q.toString());
+        const q = new URLSearchParams(next).toString();
+        history.replaceState(history.state, '', '#/tasks' + (q ? '?' + q : ''));
       } catch (_) { /* ignore */ }
     }
 
@@ -642,7 +640,7 @@
         search: { placeholder: 'Search task', onInput: (v) => setQuery(v, 'side') },
         sections: [
           { id: 'views', title: 'Views', items: VIEWS.map((v) => ({ id: 'view:' + v.id, label: v.label, icon: v.icon, run: () => applyView(v.id) })) },
-          { id: 'projects', title: 'Projects', items: projects.map((pr) => ({ id: 'project:' + pr.id, label: pr.title, dot: toneClass(pr.tone) ? 'tone-' + Math.round(Number(pr.tone)) : 'neutral', run: () => applyProject(f.projectId === pr.id ? 'all' : pr.id) })) },
+          { id: 'projects', title: 'Projects', items: projects.map((pr) => ({ id: 'project:' + pr.id, label: pr.title, dot: toneDot(pr.tone), run: () => applyProject(f.projectId === pr.id ? 'all' : pr.id) })) },
         ],
         footer: { label: 'Add New Task', icon: 'plus', run: () => openCreate(f.projectId !== 'all' ? { projectId: f.projectId } : null) },
       });
@@ -679,10 +677,12 @@
     /* Main panel: tabs · (phone filter + view chips) · toolbar (or bulk bar) · body · calc bar.
        The tabs carry no counts: the total already sits in the header pill, the
        side tree and the calc bar. */
+    // The tabs control the scroll body (role=tabpanel, aria-labelledby).
+    const body = h('div', { class: 'jay-tbody' });
     const tabs = UI.tabs([
       { id: 'list', label: 'List', icon: 'list' },
       { id: 'board', label: 'Board', icon: 'board' },
-    ], { active: ui.view, label: 'Layout', onSelect: (id) => { ui.view = id; saveUi(); writeViewUrl(); draw(); } });
+    ], { active: ui.view, label: 'Layout', panel: body, onSelect: (id) => { ui.view = id; saveUi(); writeViewUrl(); draw(); } });
     const clearBtn = h('button', { type: 'button', class: 'jay-link jay-tclear', hidden: true, onclick: clearFilters }, icon('x', 13), 'Clear filters');
     const newBtnSm = h('button', { type: 'button', class: 'jay-btn is-primary is-sm jay-tnew-sm', onclick: () => openCreate(prefillFromFilters()) }, icon('plus', 15), h('span', null, 'New Task'));
     const exportNote = () => UI.toast('Export is not available in the preview', { icon: 'download' });
@@ -694,7 +694,7 @@
         .concat(projects.map((pr) => ({ label: pr.title, active: f.projectId === pr.id, icon: f.projectId === pr.id ? 'check' : null, hint: String(pr.openTasks || 0), run: () => applyProject(pr.id) }))), { label: 'Project' }) }),
       due: UI.fpill({ key: 'Due', value: 'Any', onClick: (a) => UI.menu(a, DUE_OPTIONS.map(([k, l]) => ({ label: l, active: f.due === k, icon: f.due === k ? 'check' : null, run: () => { f.due = k; reload(); } })), { label: 'Due' }) }),
       owner: UI.fpill({ key: 'Owner', value: 'Anyone', onClick: (a) => UI.menu(a, [{ label: 'Anyone', active: f.owner === 'any', icon: f.owner === 'any' ? 'check' : null, run: () => { f.owner = 'any'; reload(); } }, '-']
-        .concat(Array.from(people.values()).map((pe) => ({ label: pe.id === 'pat' ? pe.name + ' (you)' : pe.name, active: f.owner === pe.id, icon: f.owner === pe.id ? 'check' : null, run: () => { f.owner = pe.id; reload(); } }))), { label: 'Owner' }) }),
+        .concat(Array.from(people.values()).map((pe) => ({ label: ownerLabel(pe), active: f.owner === pe.id, icon: f.owner === pe.id ? 'check' : null, run: () => { f.owner = pe.id; reload(); } }))), { label: 'Owner' }) }),
     };
     function syncPills() {
       const s = SORT_OPTIONS.find(([k]) => k === f.sort);
@@ -724,7 +724,7 @@
       const dirSel = select([['asc', 'Ascending'], ['desc', 'Descending']], f.dir);
       const projSel = select([['all', 'All projects']].concat(projects.map((pr) => [pr.id, pr.title])), f.projectId);
       const dueSel = select(DUE_OPTIONS, f.due);
-      const ownerSel = select([['any', 'Anyone']].concat(Array.from(people.values()).map((pe) => [pe.id, pe.id === 'pat' ? pe.name + ' (you)' : pe.name])), f.owner);
+      const ownerSel = select([['any', 'Anyone']].concat(Array.from(people.values()).map((pe) => [pe.id, ownerLabel(pe)])), f.owner);
       sortSel.addEventListener('change', () => { setSort(sortSel.value); dirSel.value = f.dir; });
       dirSel.addEventListener('change', () => setSort(f.sort, dirSel.value));
       projSel.addEventListener('change', () => applyProject(projSel.value));
@@ -763,9 +763,10 @@
     }
     search.addEventListener('input', () => setQuery(search.value, 'toolbar'));
 
+    const pillStrip = h('div', { class: 'jay-tpills jay-hscroll' }, pills.sort, pills.project, pills.due, pills.owner);
     const toolbar = h('div', { class: 'jay-ttoolbar', role: 'toolbar', 'aria-label': 'Filters', id: JAY.nextId('ttoolbar') },
       h('div', { class: 'jay-search jay-tsearch' }, icon('search', 15), search),
-      h('div', { class: 'jay-tpills jay-hscroll' }, pills.sort, pills.project, pills.due, pills.owner),
+      pillStrip,
       h('span', { class: 'jay-spacer' }),
       h('button', { type: 'button', class: 'jay-btn is-outline jay-texport', onclick: exportNote }, icon('download', 15), 'Export'),
       h('button', { type: 'button', class: 'jay-btn is-primary jay-tnew', onclick: () => openCreate(prefillFromFilters()) }, icon('plus', 16), 'New Task'));
@@ -805,8 +806,6 @@
       });
     }
 
-    const body = h('div', { class: 'jay-tbody' });
-    if (typeof tabs.bindPanel === 'function') tabs.bindPanel(body);
     const calc = h('div', { class: 'jay-calcbar', role: 'status', 'aria-live': 'polite' });
     const main = UI.box({ class: ['is-col', 'jay-tmain'], 'aria-label': 'Tasks' },
       h('div', { class: 'jay-ttabs' }, tabs, h('span', { class: 'jay-spacer' }), clearBtn, exportSm, searchToggle, newBtnSm),
@@ -820,6 +819,20 @@
     syncPills();
     syncChips();
     syncFilterBtn();
+
+    // A strip that scrolls sideways fades the edge that has more to show.
+    const fades = [pillStrip, chips];
+    function syncFades() {
+      fades.forEach((el) => {
+        const rest = el.scrollWidth - el.clientWidth - el.scrollLeft;
+        el.classList.toggle('is-fade-start', el.scrollLeft > 2);
+        el.classList.toggle('is-fade-end', rest > 2);
+      });
+    }
+    fades.forEach((el) => el.addEventListener('scroll', syncFades, { passive: true }));
+    const fadeRO = typeof ResizeObserver === 'function' ? new ResizeObserver(syncFades) : null;
+    if (fadeRO) fades.forEach((el) => { fadeRO.observe(el); Array.from(el.children).forEach((c) => fadeRO.observe(c)); });
+    requestAnimationFrame(syncFades);
 
     function prefillFromFilters() {
       const pre = {};
@@ -1156,11 +1169,12 @@
       clearTimeout(pending);
       offs.forEach((off) => off());
       JAY.mqMobile.removeEventListener('change', onMq);
+      if (fadeRO) fadeRO.disconnect();
       if (drawerFocusHook === focusTask) drawerFocusHook = null;
     };
   }
 
-  JAY.tasks = { openTask, openCreate, statusPill, priorityMark, dueNode, projectTag, checkToggle, toggleDone, renderBoard, STATUS, VIEWS };
+  JAY.tasks = { openTask, openCreate, statusPill, priorityMark, dueNode, checkToggle, toggleDone, renderBoard, STATUS, VIEWS };
   JAY.views = JAY.views || {};
   JAY.views.tasks = { title: 'Tasks', render };
 })();

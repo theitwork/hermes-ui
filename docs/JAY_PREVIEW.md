@@ -70,10 +70,10 @@ the same `-L 8789:127.0.0.1:8789` forward from an SSH client on the phone (e.g. 
 
 | Area | Try |
 |---|---|
-| Home | Click Today items, Attention actions (Done → Undo toast), project rows, Continue items, Status |
+| Home | Click Today items, Attention feed (All / Needs me tabs; Done, Snooze, Approve / Decline → Undo toast), project rows, Continue items, Status |
 | Talk to Jay | "What should I focus on today?", "Remind me to call the bank at 4pm", "Add a task to renew the domain", quick chips (+ Task, + Reminder, Capture idea, Research) |
-| Tasks | Status chips, search, filters, sort, List ↔ Board, drag cards between columns, bulk select, New task |
-| Projects | Select a project, open tasks, conversations, Ask Jay |
+| Tasks | Side tree views, filter pills (Sort by / Project / Due / Owner, sort direction), List ↔ Board, drag cards between columns, row menu, bulk select, Export, New Task, delete → Undo |
+| Projects | Tree (Favorites / Active / Finished / Archive), a project's stream crumbs (filters board, list and feed), tabs, List / Board, Add Task / Add Subtask, Activity feed with Approve / Decline, star / mute |
 | Navigation | Chat / Files / Automations open real Hermes; the J rail (or the titlebar **JAY** button on phones) returns |
 | Theme | Sun/moon in the topbar or rail; persists and is shared with Hermes |
 | Search | Press `/` anywhere on a JAY page |
@@ -82,7 +82,7 @@ the same `-L 8789:127.0.0.1:8789` forward from an SSH client on the phone (e.g. 
 ## 6. Tests
 
 ```bash
-./scripts/test.sh tests/test_jay_extension.py -q                        # JAY: 32 tests
+./scripts/test.sh tests/test_jay_extension.py -q                        # JAY: 51 tests
 ./scripts/test.sh tests/test_extension_hooks.py tests/test_jay_extension.py -q
 ./scripts/test.sh -q                                                    # full Hermes suite (long)
 ```

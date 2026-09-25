@@ -240,11 +240,12 @@
 .jay-side-item.is-active { background: var(--jay-accent-softer); color: var(--jay-accent-text); font-weight: 500; }
 /* Light mode: the pale lime tint alone is too faint on white, so the active row
    gets a stronger tint, heavier label and a 3px olive bar on its leading edge.
-   Tight left corners keep the bar a straight edge instead of a crescent. */
+   Square left corners keep the bar a straight edge (a rounded corner bends
+   the inset shadow into a bracket); the right side keeps the pill radius. */
 :root:not(.dark) .jay-side-item.is-active {
   background: var(--jay-accent-soft);
   font-weight: 600;
-  border-radius: 3px var(--jay-r-md) var(--jay-r-md) 3px;
+  border-radius: 0 var(--jay-r-md) var(--jay-r-md) 0;
   box-shadow: inset 3px 0 0 var(--jay-accent-text);
 }
 /* A parent row that is active only because a child row below it is the
@@ -1176,6 +1177,9 @@ select.jay-input {
   .jay-side-item.is-active,
   .jay-segmented > :is([aria-checked="true"], [aria-pressed="true"], [aria-selected="true"]) { outline: 2px solid Highlight; outline-offset: -2px; }
   .jay-meter-bars i, .jay-spark i { forced-color-adjust: none; }
+  /* The 10% track tint vanishes on Canvas; a dim CanvasText keeps the scale
+     (not GrayText, which is bright green in the Windows "Black" theme). */
+  .jay-meter-bars > i:not(.is-on) { background: color-mix(in srgb, CanvasText 28%, Canvas); }
   /* The border is an unchecked box's only cue; (0,3,0) beats the Tasks
      stylesheet's own border rules, which load after this file. */
   :root .jay-app :is(.jay-check, .jay-tcb) { border-color: CanvasText; }

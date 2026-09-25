@@ -32,8 +32,20 @@
   // Draft + active conversation are shared so "expand" keeps what you typed.
   // draftSource: 'user' (typed or edited here) or 'shortcut' (an untouched
   // "Ask Jay" prefill, which the next shortcut may replace).
-  const shared = { draft: '', draftSource: null, intent: null, convId: 'main', context: JAY.storage.get('context', 'Personal') };
+  // focusNext: a shortcut ("Ask Jay", a quick chip) is opening Talk and wants
+  // its composer focused even on phones; the focus view clears it once honoured.
+  const shared = { draft: '', draftSource: null, intent: null, convId: 'main', focusNext: false, context: JAY.storage.get('context', 'Personal') };
   const live = new Set(); // mounted Talk components, newest last
+
+  // Demo reset: the conversations and anything typed about them are gone.
+  // Registered before any component, so every mounted one sees the reset state.
+  JAY.on('data:reset', () => {
+    shared.convId = 'main';
+    shared.draft = '';
+    shared.draftSource = null;
+    shared.intent = null;
+    shared.focusNext = false;
+  });
 
   // The signed-in user's first name, or '' while JAY only knows a placeholder.
   function firstName() {
@@ -247,8 +259,8 @@
       }
       return mine;
     }
-    // The tree is always the layout's first child — the shared .has-side rule
-    // hides the first child below 1024px, so the thread must never be it.
+    // The tree goes first in the layout; the shared .has-side rule hides the
+    // .jay-side panel below 1024px.
     function placeSide(mine) {
       const next = JAY.ui.sideNav({
         label: 'Conversations',
@@ -308,7 +320,8 @@
         h('button', { type: 'button', class: 'jay-attach-x', 'aria-label': 'Remove ' + a.name, onclick: () => { attachments.splice(i, 1); renderAttachments(); } }, icon('x', 12)))));
     }
 
-    function prime(intent) {
+    // opts.focus === false sets the mode without moving focus (demo reset).
+    function prime(intent, opts) {
       shared.intent = intent && INTENTS[intent] ? intent : null;
       const spec = shared.intent ? INTENTS[shared.intent] : null;
       textarea.placeholder = spec ? spec.placeholder : DEFAULT_PLACEHOLDER;
@@ -322,7 +335,7 @@
         mount(intentTag, icon(spec.icon, 13), h('span', null, spec.label),
           h('button', { type: 'button', class: 'jay-intent-x', 'aria-label': 'Clear ' + spec.label.toLowerCase() + ' mode', onclick: () => { prime(null); textarea.focus(); } }, icon('x', 12)));
       }
-      textarea.focus({ preventScroll: true });
+      if (!opts || opts.focus !== false) textarea.focus({ preventScroll: true });
     }
 
     function setContext(c) {
@@ -434,27 +447,37 @@
       requestAnimationFrame(() => { scroll.scrollTop = scroll.scrollHeight; });
     }
 
+    // Only the newest load (or a switch to a new conversation) may land: a slow
+    // answer for a conversation the user already left never replaces the thread.
+    let loadSeq = 0;
     async function load(id) {
+      const my = ++loadSeq;
       convId = id || 'main';
       shared.convId = convId;
       mount(thread, JAY.ui.state('loading', { rows: 3 }));
+      let fresh = null;
       try {
-        conversation = await JAY.data.getConversation(convId);
-        // A conversation that no longer exists (demo reset, stale link) falls back to Main.
-        if (!usable(conversation) && convId !== 'main') { load('main'); return; }
-        if (!usable(conversation)) { conversation = { id: convId, title: 'Main', messages: [] }; }
-        if (!Array.isArray(conversation.messages)) conversation.messages = [];
+        fresh = await JAY.data.getConversation(convId);
       } catch (err) {
+        if (my !== loadSeq) return;
         mount(thread, JAY.ui.state('error', { title: 'Couldn’t load this conversation.', action: { label: 'Retry', icon: 'refresh', run: () => load(convId) } }));
         return;
       }
+      if (my !== loadSeq) return;
+      // A conversation that no longer exists (demo reset, stale link) falls back to Main.
+      if (!usable(fresh) && convId !== 'main') { load('main'); return; }
+      conversation = usable(fresh) ? fresh : { id: convId, title: 'Main', messages: [] };
+      if (!Array.isArray(conversation.messages)) conversation.messages = [];
       updateHeader();
       renderThread();
       renderSide();
     }
 
     async function newConversation() {
-      convId = await JAY.data.newConversation();
+      const my = ++loadSeq;
+      const id = await JAY.data.newConversation();
+      if (my !== loadSeq) return;
+      convId = id;
       shared.convId = convId;
       conversation = { id: convId, title: 'New conversation', messages: [] };
       updateHeader();
@@ -524,9 +547,12 @@
     // this component is mid-send, when it already holds the newest messages.
     async function syncFromStore() {
       if (busy || !conversation) return;
+      const id = convId;
+      const seq = loadSeq;
       let fresh = null;
-      try { fresh = await JAY.data.getConversation(convId); } catch (_) { return; }
-      if (busy) return;
+      try { fresh = await JAY.data.getConversation(id); } catch (_) { return; }
+      // A load or reset moved on meanwhile: this answer is for another thread.
+      if (busy || id !== convId || seq !== loadSeq) return;
       if (!usable(fresh)) { if (convId !== 'main') load('main'); return; }
       const msgs = Array.isArray(fresh.messages) ? fresh.messages : [];
       if (msgs.length === conversation.messages.length && fresh.title === conversation.title) return;
@@ -550,6 +576,17 @@
     autosize();
     if (shared.intent) prime(shared.intent); else textarea.placeholder = DEFAULT_PLACEHOLDER;
     load(shared.convId);
+    // A shortcut opened this focus view and asked for the composer (phones
+    // included). The caller focuses synchronously inside its tap; this is the
+    // late retry once layout settles, after which the request is cleared.
+    let focusTimer = null;
+    if (o.mode === 'focus' && shared.focusNext) {
+      focusTimer = setTimeout(() => {
+        focusTimer = null;
+        shared.focusNext = false;
+        if (el.isConnected && !el.contains(document.activeElement)) focusComposer();
+      }, 60);
+    }
 
     const offCtx = JAY.on('context', () => { updateHeader(); composerContext.querySelector('.jay-chip-label').textContent = shared.context; });
     const offOpen = JAY.on('chat:open', (id) => load(id));
@@ -560,6 +597,16 @@
       if (p && p.intent !== undefined) prime(shared.intent);
     });
     const offChat = JAY.on('data:chat', () => { syncFromStore(); });
+    // Demo reset (shared state was already cleared at module level): drop the
+    // draft, mode, attachments and voice, and go back to Main. Focus stays put.
+    const offReset = JAY.on('data:reset', () => {
+      stopMic(false);
+      textarea.value = '';
+      if (attachments.length) { attachments.splice(0, attachments.length); renderAttachments(); }
+      autosize();
+      prime(null, { focus: false });
+      load('main');
+    });
     const offSessions = o.mode === 'focus' ? JAY.on('data:sessions', () => renderSide()) : () => {};
     const onTreeMq = () => updateHeader();
     if (typeof mqNoTree.addEventListener === 'function') mqNoTree.addEventListener('change', onTreeMq);
@@ -570,10 +617,13 @@
       prime,
       load,
       destroy() {
-        saveDraft(); stopMic(false); offCtx(); offOpen(); offPrime(); offDraft(); offChat(); offSessions();
+        saveDraft(); stopMic(false); offCtx(); offOpen(); offPrime(); offDraft(); offChat(); offReset(); offSessions();
         if (typeof mqNoTree.removeEventListener === 'function') mqNoTree.removeEventListener('change', onTreeMq);
         if (resizeObs) resizeObs.disconnect();
+        // Left before the retry ran: the request dies with this view.
+        if (focusTimer) { clearTimeout(focusTimer); focusTimer = null; shared.focusNext = false; }
         sideSeq += 1;
+        loadSeq += 1;
         live.delete(api);
       },
     };

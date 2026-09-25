@@ -63,13 +63,15 @@
   // Open Jay with a draft and/or an intent. The draft goes through
   // JAY.chat.prefill, so text the user already typed is kept. Talk opens
   // synchronously when the shell allows it, so the composer takes focus inside
-  // the same tap (phones raise the keyboard).
+  // the same tap (phones raise the keyboard); shared.focusNext asks the Talk
+  // view to retry that focus once its layout settles.
   function goTalk(req) {
     const r = req || {};
     const hasDraft = typeof r.draft === 'string';
     if (hasDraft || r.intent) JAY.chat.prefill(hasDraft ? r.draft : null, r.intent ? { intent: r.intent } : {});
     const dock = !JAY.isMobile() ? document.querySelector('.jay-talk.is-dock') : null;
     if (!dock || !dock.isConnected) {
+      if (JAY.chat.shared) JAY.chat.shared.focusNext = true;
       if (JAY.shell && typeof JAY.shell.navigate === 'function') JAY.shell.navigate('#/talk');
       else { location.hash = '#/talk'; return; }
     }
@@ -141,15 +143,25 @@
     return list;
   }
 
-  // Today head sub-line: what is left of the day (the date is in the page header).
+  // Today head sub-line (the date is already in the page header): the next
+  // thing on the list — "Next: Dinner with Lea 20:30" (the title shortens, the
+  // time never does) — or, once nothing is ahead, what is still open today —
+  // "4 due · 2 reminders".
   function todaySubline(items) {
     const now = Date.now();
     const list = Array.isArray(items) ? items : [];
-    const ahead = list.filter((it) => new Date(it.end || it.at).getTime() >= now);
-    if (!list.length) return 'Nothing scheduled';
-    if (!ahead.length) return 'Nothing left · ' + fmt.plural(list.length, 'item') + ' earlier';
-    const next = ahead[0];
-    return (new Date(next.at).getTime() <= now ? 'Now ' : 'Next ') + fmt.time(next.at) + ' · ' + ahead.length + ' of ' + list.length + ' left';
+    const text = (s) => h('span', { class: 'jay-today-sub-text' }, s);
+    if (!list.length) return text('Nothing scheduled');
+    const next = list.find((it) => new Date(it.end || it.at).getTime() >= now);
+    if (next) {
+      const on = new Date(next.at).getTime() <= now;
+      // The no-break space keeps title and time apart, for sight and speech alike.
+      return [text((on ? 'Now: ' : 'Next: ') + next.title), h('span', { class: 'jay-today-sub-at' }, '\u00a0' + fmt.time(next.at))];
+    }
+    const due = list.filter((it) => it.kind === 'task').length;
+    const reminders = list.filter((it) => it.kind === 'reminder').length;
+    const parts = [due ? due + ' due' : null, reminders ? fmt.plural(reminders, 'reminder') : null].filter(Boolean);
+    return text(parts.length ? parts.join(' · ') : 'Nothing left today');
   }
 
   // Open the timeline around "now", snapped to a row edge so no item is cut in
@@ -275,7 +287,9 @@
         text = back && !Number.isNaN(back.getTime()) ? 'Snoozed until ' + untilLabel(back) : 'Snoozed';
       }
       const toastIcon = action === 'snooze' ? 'snooze' : (action === 'dismiss' || action === 'decline' ? 'x' : 'check');
-      ui.toast(text + ': ' + (item.target || item.title), { icon: toastIcon, action: { label: 'Undo', run: () => JAY.data.restoreAttention(item.id) } });
+      // Undo names the action it reverses, so it never depends on the data
+      // layer still remembering the last resolve of this item.
+      ui.toast(text + ': ' + (item.target || item.title), { icon: toastIcon, action: { label: 'Undo', run: () => JAY.data.restoreAttention(item.id, { action }) } });
       return true;
     } catch (err) {
       ui.toast('Couldn’t update that item.', { tone: 'danger', icon: 'alert-circle' });
@@ -463,8 +477,11 @@
       { id: 'all', label: 'All', badge: 0 },
       { id: 'me', label: 'Needs me', badge: 0 },
     ], { label: 'Attention filter', active: 'all', panel: body, onSelect: (id) => { filter = id; paint(); } });
+    const attSub = h('div', { class: 'jay-hp-sub jay-att-sub' });
     function setBadges(items) {
       const counts = { all: items ? items.length : 0, me: items ? items.filter((it) => NEEDS_ME.includes(it.level)).length : 0 };
+      attSub.textContent = !items ? '' : !counts.all ? 'All clear'
+        : counts.me ? counts.me + ' need' + (counts.me === 1 ? 's' : '') + ' you · ' + counts.all + ' open' : counts.all + ' open · FYI only';
       Object.keys(counts).forEach((id) => {
         const b = tabs.querySelector('[data-tab="' + id + '"] .jay-badge');
         if (!b) return;
@@ -497,7 +514,7 @@
       ], { label: 'Attention options', align: 'right' }),
     }, icon('more-vertical', 18));
     const el = ui.box({ class: ['is-col', 'jay-hp', 'jay-attention'], 'aria-labelledby': 'jayAttH', 'data-jay-region': 'attention', id: 'jayAttention' },
-      panelHead('Attention', { id: 'jayAttH', extra: [readAll, more], class: 'is-top is-att' }),
+      panelHead('Attention', { id: 'jayAttH', sub: attSub, extra: [readAll, more], class: 'is-top is-att' }),
       h('div', { class: 'jay-att-tabbar' }, tabs),
       body);
     const reset = () => { last = null; listEl = null; setBadges(null); };
@@ -527,14 +544,15 @@
     return h('ul', { class: 'jay-hp-rows' }, projects.slice(0, o.limit || 4).map((p) => {
       const hasProgress = p.progress !== null && p.progress !== undefined;
       const pct = hasProgress ? Math.max(0, Math.min(100, Math.round(Number(p.progress) || 0))) : null;
-      const count = fmt.plural(Number(p.openTasks) || 0, 'task');
+      const open = Number(p.openTasks) || 0;
+      const count = fmt.plural(open, 'task');
       // The button carries the whole name; the meter inside is decoration.
       const meter = hasProgress ? ui.meter(p.progress, { decorative: true }) : null;
       if (meter) meter.setAttribute('aria-hidden', 'true');
       return h('li', null,
         h('button', {
           type: 'button', class: 'jay-hp-row jay-proj-row', onclick: () => JAY.projects.openPreview(p.id),
-          'aria-label': p.title + ', ' + (hasProgress ? pct + '% complete' : count),
+          'aria-label': p.title + ', ' + (hasProgress ? pct + '% complete' : fmt.plural(open, 'open task')),
         },
           h('span', { class: ['jay-side-dot', 'is-tone-' + toneOf(p)], 'aria-hidden': 'true' }),
           h('span', { class: 'jay-proj-title' }, p.title),
@@ -617,7 +635,7 @@
     const widgets = [];
     const todayBody = h('div', { class: 'jay-today-body' });
     const todayFoot = h('div', { class: 'jay-today-foot' });
-    const todaySub = h('div', { class: 'jay-hp-sub' });
+    const todaySub = h('div', { class: 'jay-hp-sub jay-today-sub' });
     const syncTodayEdge = edgeOnScroll(todayBody);
     const chat = JAY.chat.create({ mode: 'dock' });
     // Keep Today opened at "now" while the panels around it settle (fonts,
@@ -673,9 +691,9 @@
     const todayW = JAY.widget(todayBody, {
       name: 'today', domains: ['today'],
       load: () => JAY.data.getTodayItems().then((items) => {
-        todaySub.textContent = Array.isArray(items) ? todaySubline(items) : '';
+        mount(todaySub, Array.isArray(items) ? todaySubline(items) : null);
         return items;
-      }, (err) => { todaySub.textContent = ''; throw err; }),
+      }, (err) => { mount(todaySub); throw err; }),
       render: (items) => {
         // Tablets fold earlier items away; the page scrolls, not the panel.
         const list = renderToday(items, { collapsePast: isTablet() });

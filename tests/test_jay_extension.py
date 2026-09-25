@@ -205,7 +205,10 @@ def test_storage_key_scan_resolves_constants():
 
 # ── Data layer (runs the real modules in Node) ────────────────────────────
 
-NODE_HARNESS = r"""
+# Browser stand-ins shared by the Node harnesses: an in-memory localStorage
+# (`store`), no-op media queries and a bare document. `loadModules` runs the
+# named files from the JS directory passed as argv[2], in order.
+NODE_PRELUDE = r"""
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const store = {};
 global.window = global;
@@ -216,17 +219,21 @@ global.localStorage = {
   key: (i) => (Object.keys(store)[i] === undefined ? null : Object.keys(store)[i]),
   get length() { return Object.keys(store).length; },
 };
-// A superseded demo blob (with a typed chat message) and a Hermes key that is not ours.
-const LEGACY = JSON.stringify({ builtOn: '2020-01-01', data: { conversations: [{ id: 'main', messages: [{ role: 'user', text: 'typed by the owner' }] }] } });
-store['jay:demo-v1'] = LEGACY;
-store['hermes-theme'] = 'dark';
 global.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
 global.document = { getElementById: () => null, body: {} };
 global.requestAnimationFrame = (f) => setTimeout(f, 0);
 const dir = process.argv[2];
-for (const f of ['jay-core.js', 'jay-data-mock.js', 'jay-providers.js', 'jay-chat.js']) {
-  vm.runInThisContext(fs.readFileSync(path.join(dir, f), 'utf8'), { filename: f });
+function loadModules(files) {
+  for (const f of files) vm.runInThisContext(fs.readFileSync(path.join(dir, f), 'utf8'), { filename: f });
 }
+"""
+
+NODE_HARNESS = NODE_PRELUDE + r"""
+// A superseded demo blob (with a typed chat message) and a Hermes key that is not ours.
+const LEGACY = JSON.stringify({ builtOn: '2020-01-01', data: { conversations: [{ id: 'main', messages: [{ role: 'user', text: 'typed by the owner' }] }] } });
+store['jay:demo-v1'] = LEGACY;
+store['hermes-theme'] = 'dark';
+loadModules(['jay-core.js', 'jay-data-mock.js', 'jay-providers.js', 'jay-chat.js']);
 (async () => {
   const D = window.JAY.data;
   const out = {};
@@ -293,15 +300,19 @@ for (const f of ['jay-core.js', 'jay-data-mock.js', 'jay-providers.js', 'jay-cha
 """
 
 
-@pytest.fixture(scope="module")
-def data_layer(tmp_path_factory):
+def _run_node_harness(tmp_path_factory, source):
     if not NODE:
         pytest.skip("node is required for the JAY data-layer test")
     harness = tmp_path_factory.mktemp("jay") / "harness.js"
-    harness.write_text(NODE_HARNESS, encoding="utf-8")
+    harness.write_text(source, encoding="utf-8")
     proc = subprocess.run([NODE, str(harness), str(JS_DIR)], capture_output=True, text=True, timeout=60)
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout.strip().splitlines()[-1])
+
+
+@pytest.fixture(scope="module")
+def data_layer(tmp_path_factory):
+    return _run_node_harness(tmp_path_factory, NODE_HARNESS)
 
 
 def test_mock_counts_match_home_widgets(data_layer):
@@ -374,6 +385,332 @@ def test_only_demo_state_is_persisted(data_layer):
 def test_reset_demo_clears_superseded_demo_blobs(data_layer):
     assert data_layer["afterReset"] == ["jay:adapters"]
     assert data_layer["foreignKeptAfterReset"] is True
+
+
+# ── Data-layer contracts the views rely on (fresh Node process) ───────────
+# Each section records its result, or {"error": ...} when it throws, so one
+# broken contract fails its own test instead of hiding the others. Sections
+# run in order on one dataset and each uses items the others leave alone.
+
+NODE_CONTRACTS = NODE_PRELUDE + r"""
+// A blob saved earlier today by the previous schema (no `schema`, tasks
+// without streams, no user) must be rebuilt instead of served as it is.
+const STALE_TITLE = 'Edited before the schema bump';
+loadModules(['jay-core.js', 'jay-data-mock.js']);
+const J = window.JAY;
+const stale = J.mock.build(new Date());
+stale.tasks.forEach((t) => { delete t.stream; });
+delete stale.user;
+stale.tasks[0].title = STALE_TITLE;
+store['jay:demo-v2'] = JSON.stringify({ builtOn: J.fmt.isoDate(new Date()), data: stale });
+loadModules(['jay-providers.js']);
+const D = J.data;
+const out = {};
+const blob = () => {
+  const b = JSON.parse(store['jay:demo-v2'] || 'null');
+  if (!b || !b.data) throw new Error('the demo blob was never persisted');
+  return b;
+};
+const ids = (list) => list.map((t) => t.id);
+const events = [];
+['tasks', 'today', 'projects', 'attention', 'reset'].forEach((e) => J.on('data:' + e, () => events.push(e)));
+const seen = () => Array.from(new Set(events)).sort();
+async function section(name, fn) {
+  try { out[name] = await fn(); } catch (e) { out[name] = { error: String((e && e.stack) || e) }; }
+}
+(async () => {
+  await section('streams', async () => {
+    const projects = await D.getProjects();
+    const byId = new Map(projects.map((p) => [p.id, p]));
+    const inProject = (t, p) => !!p && Array.isArray(p.streams) && typeof t.stream === 'string' && p.streams.includes(t.stream);
+    const served = await D.getTasks({});
+    const built = J.mock.build(new Date());
+    return {
+      total: served.length,
+      notInProject: served.filter((t) => !inProject(t, byId.get(t.projectId))).map((t) => t.id + ':' + t.stream),
+      builtNotInProject: built.tasks.filter((t) => !inProject(t, built.projects.find((p) => p.id === t.projectId))).map((t) => t.id),
+      staleServed: served.some((t) => t.title === STALE_TITLE),
+    };
+  });
+
+  await section('user', () => D.getUser());
+
+  await section('owner', async () => {
+    const none = ids(await D.getTasks({}));
+    return {
+      none,
+      any: ids(await D.getTasks({ owner: 'any' })),
+      all: ids(await D.getTasks({ owner: 'all' })),
+      rana: (await D.getTasks({ owner: 'rana' })).map((t) => t.assignee),
+    };
+  });
+
+  await section('sort', async () => {
+    const time = (v) => new Date(v).getTime();
+    const RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
+    const ordered = (list, cmp, dir) => list.every((t, i) => i === 0 || (dir === 'asc' ? cmp(list[i - 1], t) <= 0 : cmp(list[i - 1], t) >= 0));
+    const PRIMARY = {
+      title: (a, b) => String(a.title).localeCompare(String(b.title)),
+      updated: (a, b) => time(a.updatedAt) - time(b.updatedAt),
+      priority: (a, b) => RANK[a.priority] - RANK[b.priority],
+      status: (a, b) => D.STATUS_ORDER.indexOf(a.status) - D.STATUS_ORDER.indexOf(b.status),
+    };
+    // Due: open tasks first, undated after dated, and only the dates follow dir.
+    const dueOrdered = (list, dir) => {
+      const firstDone = list.findIndex((t) => t.status === 'done');
+      const doneLast = firstDone < 0 || list.slice(firstDone).every((t) => t.status === 'done');
+      const open = list.filter((t) => t.status !== 'done');
+      const firstUndated = open.findIndex((t) => !t.due);
+      const undatedLast = firstUndated < 0 || open.slice(firstUndated).every((t) => !t.due);
+      return doneLast && undatedLast && ordered(open.filter((t) => t.due), (a, b) => time(a.due) - time(b.due), dir);
+    };
+    const res = {};
+    for (const key of ['due', 'priority', 'status', 'updated', 'title']) {
+      const asc = await D.getTasks({ sort: key, dir: 'asc' });
+      const desc = await D.getTasks({ sort: key, dir: 'desc' });
+      const dflt = ids(await D.getTasks({ sort: key })).join();
+      const check = key === 'due' ? dueOrdered : (list, dir) => ordered(list, PRIMARY[key], dir);
+      res[key] = {
+        differs: ids(asc).join() !== ids(desc).join(),
+        ascOrdered: check(asc, 'asc'),
+        descOrdered: check(desc, 'desc'),
+        defaultDir: dflt === ids(asc).join() ? 'asc' : (dflt === ids(desc).join() ? 'desc' : 'neither'),
+      };
+    }
+    return res;
+  });
+
+  await section('snooze', async () => {
+    const until = new Date(Date.now() + 26 * 3600000).toISOString();
+    const res = await D.resolveAttention('at-6', 'snooze', { until });
+    const stored = blob().data.attention.find((a) => a.id === 'at-6').snoozedUntil;
+    const hidden = !(await D.getAttentionItems()).some((a) => a.id === 'at-6');
+    await D.restoreAttention('at-6', { action: 'snooze' });
+    const back = (await D.getAttentionItems()).some((a) => a.id === 'at-6');
+    // A time that is not in the future, or not a time at all, falls back to 3 h.
+    const t0 = Date.now();
+    const past = await D.resolveAttention('at-6', 'snooze', { until: new Date(t0 - 3600000).toISOString() });
+    await D.restoreAttention('at-6', { action: 'snooze' });
+    const junk = await D.resolveAttention('at-6', 'snooze', { until: 'not a date' });
+    await D.restoreAttention('at-6', { action: 'snooze' });
+    const minutes = (iso) => Math.round((new Date(iso).getTime() - t0) / 60000);
+    return { until, returned: res.snoozedUntil, stored, hidden, back, pastMinutes: minutes(past.snoozedUntil), junkMinutes: minutes(junk.snoozedUntil) };
+  });
+
+  await section('deleteRestore', async () => {
+    const before = blob().data;
+    const index = before.tasks.findIndex((t) => t.id === 'task-005');
+    const original = JSON.stringify(before.tasks[index]);
+    const count = before.tasks.length;
+    events.length = 0;
+    const snap = await D.deleteTask('task-005');
+    const r = { originalIndex: index, deleteEvents: seen() };
+    r.snapKeys = Object.keys(snap || {}).sort();
+    r.snapTaskId = snap && snap.task ? snap.task.id : null;
+    r.snapIndex = snap ? snap.index : null;
+    r.snapAttention = snap ? snap.attentionIds : null;
+    const afterDelete = blob().data;
+    r.removed = !afterDelete.tasks.some((t) => t.id === 'task-005') && afterDelete.tasks.length === count - 1;
+    r.getTaskAfterDelete = await D.getTask('task-005');
+    const linked = afterDelete.attention.find((a) => a.id === 'at-2');
+    r.linkedAfterDelete = { resolved: linked.resolved, resolvedBy: linked.resolvedBy || null };
+    r.hiddenAfterDelete = !(await D.getAttentionItems()).some((a) => a.id === 'at-2');
+    events.length = 0;
+    const restored = await D.restoreTask(snap);
+    r.restoreEvents = seen();
+    const afterRestore = blob().data;
+    r.restoredId = restored ? restored.id : null;
+    r.restoredIndex = afterRestore.tasks.findIndex((t) => t.id === 'task-005');
+    r.restoredUnchanged = JSON.stringify(afterRestore.tasks[r.restoredIndex]) === original;
+    const reopened = afterRestore.attention.find((a) => a.id === 'at-2');
+    r.linkedAfterRestore = { resolved: reopened.resolved, hasResolvedBy: 'resolvedBy' in reopened };
+    r.visibleAfterRestore = (await D.getAttentionItems()).some((a) => a.id === 'at-2');
+    await D.restoreTask(snap);
+    r.copiesAfterSecondRestore = blob().data.tasks.filter((t) => t.id === 'task-005').length;
+    r.countRestored = blob().data.tasks.length === count;
+    // An item resolved before the delete is not the delete's to reopen.
+    await D.resolveAttention('at-3', 'dismiss');
+    const snap6 = await D.deleteTask('task-006');
+    await D.restoreTask(snap6);
+    r.priorResolvedSnapAttention = snap6.attentionIds;
+    r.priorResolvedStays = blob().data.attention.find((a) => a.id === 'at-3').resolved === true;
+    try { await D.deleteTask('task-missing'); r.missing = 'resolved'; } catch (e) { r.missing = String(e.message); }
+    return r;
+  });
+
+  await section('streamWrites', async () => {
+    const kept = await D.createTask({ title: 'Stream kept', projectId: 'company-website', stream: 'Hosting' });
+    const foreign = await D.createTask({ title: 'Stream from another project', projectId: 'company-website', stream: 'Finance' });
+    const moved = await D.updateTask(kept.id, { projectId: 'home' });
+    const picked = await D.updateTask(kept.id, { stream: 'Bills' });
+    return { kept: kept.stream, foreign: foreign.stream, moved: moved.stream, picked: picked.stream, schema: blob().schema };
+  });
+
+  await section('activityLink', async () => {
+    const p = await D.getProject('business-ops');
+    const a = p.activity.find((x) => x.id === 'ac-6');
+    const at = (await D.getAttentionItems()).find((x) => x.id === a.attentionId);
+    return { attentionId: a.attentionId, actions: at ? at.actions : null };
+  });
+
+  await section('reset', async () => {
+    events.length = 0;
+    D.resetDemo();
+    return { events: seen(), stored: 'jay:demo-v2' in store };
+  });
+
+  console.log(JSON.stringify(out));
+})().catch((e) => { console.error(e); process.exit(1); });
+"""
+
+
+@pytest.fixture(scope="module")
+def contracts(tmp_path_factory):
+    return _run_node_harness(tmp_path_factory, NODE_CONTRACTS)
+
+
+def _section(results, name):
+    value = results[name]
+    assert not (isinstance(value, dict) and "error" in value), "%s threw:\n%s" % (name, value.get("error"))
+    return value
+
+
+def test_every_mock_task_has_a_stream_from_its_project(contracts):
+    s = _section(contracts, "streams")
+    assert s["total"] > 20
+    assert s["builtNotInProject"] == []
+    assert s["notInProject"] == []
+    # The same-day blob saved without a schema was rebuilt, not served.
+    assert s["staleServed"] is False
+
+
+def test_get_user_returns_the_demo_user(contracts):
+    assert _section(contracts, "user") == {"id": "pat", "name": "Pat", "context": "Personal", "workspace": "Main"}
+
+
+def test_owner_any_equals_no_filter(contracts):
+    o = _section(contracts, "owner")
+    assert o["any"] == o["none"]
+    assert o["all"] == o["none"]
+    # A real owner still filters.
+    assert o["rana"] and set(o["rana"]) == {"rana"}
+    assert len(o["rana"]) < len(o["none"])
+
+
+@pytest.mark.parametrize("key", ["due", "priority", "status", "updated", "title"])
+def test_sort_direction_changes_order(contracts, key):
+    r = _section(contracts, "sort")[key]
+    assert r["differs"] is True, "dir asc/desc returned the same order for sort=%s" % key
+    assert r["ascOrdered"] is True
+    assert r["descOrdered"] is True
+    # Without dir: newest first for Last update, ascending for everything else.
+    assert r["defaultDir"] == ("desc" if key == "updated" else "asc")
+
+
+def test_snooze_until_sets_snoozed_until(contracts):
+    s = _section(contracts, "snooze")
+    assert s["returned"] == s["until"]
+    assert s["stored"] == s["until"]
+    assert s["hidden"] is True
+    assert s["back"] is True
+    # Past or unparseable times fall back to three hours from now.
+    assert 179 <= s["pastMinutes"] <= 181
+    assert 179 <= s["junkMinutes"] <= 181
+
+
+def test_delete_task_snapshot_restores_in_place(contracts):
+    r = _section(contracts, "deleteRestore")
+    assert r["snapKeys"] == ["attentionIds", "index", "task"]
+    assert r["snapTaskId"] == "task-005"
+    assert r["snapIndex"] == r["originalIndex"]
+    assert r["removed"] is True
+    assert r["getTaskAfterDelete"] is None
+    assert r["deleteEvents"] == ["attention", "projects", "tasks", "today"]
+    # Back at the same index with the same id and stored fields.
+    assert r["restoredId"] == "task-005"
+    assert r["restoredIndex"] == r["originalIndex"]
+    assert r["restoredUnchanged"] is True
+    assert r["restoreEvents"] == ["attention", "projects", "tasks", "today"]
+    # A second restore of the same snapshot changes nothing.
+    assert r["copiesAfterSecondRestore"] == 1
+    assert r["countRestored"] is True
+    assert r["missing"] == "Task not found"
+
+
+def test_delete_task_resolves_and_restore_reopens_only_its_attention(contracts):
+    r = _section(contracts, "deleteRestore")
+    assert r["snapAttention"] == ["at-2"]
+    assert r["linkedAfterDelete"] == {"resolved": True, "resolvedBy": "delete"}
+    assert r["hiddenAfterDelete"] is True
+    assert r["linkedAfterRestore"] == {"resolved": False, "hasResolvedBy": False}
+    assert r["visibleAfterRestore"] is True
+    # at-3 was dismissed before its task was deleted: not in the snapshot, still resolved.
+    assert r["priorResolvedSnapAttention"] == []
+    assert r["priorResolvedStays"] is True
+
+
+def test_task_stream_must_belong_to_the_task_project(contracts):
+    w = _section(contracts, "streamWrites")
+    assert w["kept"] == "Hosting"
+    assert w["foreign"] is None
+    assert w["moved"] is None
+    assert w["picked"] == "Bills"
+    assert w["schema"] == 3
+
+
+def test_project_activity_links_to_its_attention_request(contracts):
+    a = _section(contracts, "activityLink")
+    assert a["attentionId"] == "at-4"
+    assert a["actions"] == ["approve", "decline"]
+
+
+def test_reset_demo_emits_data_reset(contracts):
+    r = _section(contracts, "reset")
+    assert "reset" in r["events"]
+    assert {"attention", "projects", "tasks", "today"} <= set(r["events"])
+    assert r["stored"] is False
+
+
+# ── Design-system doc stays in step with the tokens ───────────────────────
+
+TOKENS_CSS = CSS_DIR / "jay-tokens.css"
+DESIGN_DOC = REPO_ROOT / "docs" / "JAY_DESIGN_SYSTEM.md"
+
+
+def _css_vars(src, selector):
+    src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    m = re.search(r"^%s\s*\{(.*?)^\}" % re.escape(selector), src, flags=re.M | re.S)
+    assert m, selector
+    return {k: " ".join(v.split()) for k, v in re.findall(r"(--jay-[\w-]+)\s*:\s*([^;]+);", m.group(1))}
+
+
+def _doc_token_rows():
+    text = DESIGN_DOC.read_text(encoding="utf-8")
+    section = text.split("\n## 1.", 1)[1].split("\n## 2.", 1)[0]
+    rows = {}
+    for line in section.splitlines():
+        if not line.startswith("| `--jay-"):
+            continue
+        cells = [c.strip() for c in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
+        token = cells[0].strip("`")
+        assert token not in rows, "%s is documented twice" % token
+        rows[token] = [" ".join(c.strip("`").split()) for c in cells[1:-1]]
+    return rows
+
+
+def test_design_doc_token_table_matches_tokens_css():
+    src = TOKENS_CSS.read_text(encoding="utf-8")
+    light = _css_vars(src, ":root")
+    dark = _css_vars(src, ":root.dark")
+    rows = _doc_token_rows()
+    defined = set(light) | set(dark)
+    assert set(rows) == defined, "undocumented: %s; not in CSS: %s" % (sorted(defined - set(rows)), sorted(set(rows) - defined))
+    for token, cells in rows.items():
+        if len(cells) == 2:  # | token | dark | light | use |
+            assert cells == [dark.get(token, light.get(token)), light.get(token)], token
+        else:  # | token | value | use | — the same in both modes
+            assert token not in dark, "%s differs by mode but has one value in the doc" % token
+            assert cells == [light[token]], token
 
 
 # ── Preview launcher safety ───────────────────────────────────────────────

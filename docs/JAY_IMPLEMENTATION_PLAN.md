@@ -97,7 +97,9 @@ per domain. Views never change. Every widget renders loading / empty / error / n
 
 ## 8. Theme strategy
 
-- JAY surfaces use `--jay-*` tokens defined for dark (charcoal + muted green) and light (warm ivory) separately.
+- JAY surfaces use `--jay-*` tokens defined for dark and light separately. v2 (see `docs/JAY_DESIGN_SYSTEM.md`)
+  replaced the phase-1 palette (charcoal + muted green / warm ivory) with floating charcoal panels, a lime
+  accent and self-hosted Inter / Poppins.
 - The `.dark` class from Hermes drives both, so one toggle switches Hermes and JAY together.
 - A registered `jay` skin applies the same palette to Hermes' own chrome when the user is in Chat/Files/etc.
 

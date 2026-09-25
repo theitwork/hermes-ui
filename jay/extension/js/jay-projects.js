@@ -105,16 +105,13 @@
   function has(mod, fn) { return !!(JAY[mod] && typeof JAY[mod][fn] === 'function'); }
   function openTask(id) { if (has('tasks', 'openTask')) JAY.tasks.openTask(id); }
   function newTask(prefill) { if (has('tasks', 'openCreate')) JAY.tasks.openCreate(prefill); }
-  // Adds to the composer draft (a typed draft is kept) and focuses it in the
-  // same gesture, so a phone opens its keyboard on the first tap.
+  // Home's goTalk adds to the composer draft (a typed draft is kept) and
+  // focuses it in the same gesture, so a phone opens its keyboard on the first tap.
   function askJay(p) {
-    const text = 'About ' + p.title + ': ';
-    if (has('chat', 'prefill')) JAY.chat.prefill(text);
-    else if (JAY.chat && JAY.chat.shared) JAY.chat.shared.draft = text;
-    if (has('shell', 'navigate')) {
-      JAY.shell.navigate('#/talk');
-      if (has('chat', 'focus')) JAY.chat.focus();
-    } else location.hash = '#/talk';
+    const draft = 'About ' + p.title + ': ';
+    if (has('home', 'goTalk')) { JAY.home.goTalk({ draft }); return; }
+    if (has('chat', 'prefill')) JAY.chat.prefill(draft);
+    location.hash = '#/talk';
   }
   function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
   function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
@@ -128,6 +125,20 @@
     if (st === 'today') return 'Today';
     const rel = fmt.due(d);
     return rel === fmt.dateShort(d) ? null : rel;
+  }
+
+  // A horizontal strip that scrolls (tabs on phones) fades the edge that has
+  // more to show: is-fade-start / is-fade-end, synced on scroll and after layout.
+  function edgeFade(el) {
+    const sync = () => {
+      const rest = el.scrollWidth - el.clientWidth - el.scrollLeft;
+      el.classList.toggle('is-fade-start', el.scrollLeft > 2);
+      el.classList.toggle('is-fade-end', rest > 2);
+    };
+    el.addEventListener('scroll', sync, { passive: true });
+    el.syncFade = sync;
+    requestAnimationFrame(sync);
+    return el;
   }
 
   function crumbs(items, onPick, active) {
@@ -204,7 +215,7 @@
     const spec = REQUEST_ACTIONS[action];
     try {
       await JAY.data.resolveAttention(r.id, action);
-      UI.toast(spec.toast + ': ' + (r.target || r.title), { icon: spec.icon, action: { label: 'Undo', run: () => JAY.data.restoreAttention(r.id) } });
+      UI.toast(spec.toast + ': ' + (r.target || r.title), { icon: spec.icon, action: { label: 'Undo', run: () => JAY.data.restoreAttention(r.id, { action }) } });
     } catch (_) {
       UI.toast('Couldn’t update that request.', { tone: 'danger', icon: 'alert-circle' });
     }
@@ -219,18 +230,28 @@
       || (t.split(/\s+/).length >= 2 ? tasks.find((x) => x.title.toLowerCase().includes(t)) : null)
       || null;
   }
-  // opts: { since (unread cut-off; omit for none), requests, onAnswer, showProject }
+  // The activity's own stream (its first context entry that names one).
+  function streamIn(a, p) { return list(a.context).find((c) => list(p.streams).includes(c)) || null; }
+  // A target opens its task; without one it opens its stream (onStream) or
+  // the project (onProject), so every target is a lime link.
+  function targetRun(a, p, o) {
+    const task = taskFor(p, a.target);
+    if (task) return () => openTask(task.id);
+    const s = streamIn(a, p);
+    if (s && o.onStream) return () => o.onStream(s);
+    return o.onProject ? () => o.onProject(s) : null;
+  }
+  // opts: { since (unread cut-off; omit for none), requests, onAnswer, showProject, onStream, onProject }
   function feedCard(a, p, opts) {
     const o = opts || {};
     const who = a.actor ? personOf(a.actor, p.people) : null;
-    const task = taskFor(p, a.target);
     const req = requestFor(a, o.requests);
     const node = UI.feedItem({
       who: who ? { id: who.id, name: who.name } : null,
       icon: 'history', hue: 'neutral',
       verb: (req && a.verb && req.verb) || a.verb || a.text || '',
       target: a.verb ? a.target : null,
-      onTarget: task ? () => openTask(task.id) : null,
+      onTarget: a.verb && a.target ? targetRun(a, p, o) : null,
       context: a.verb ? list(a.context).concat(o.showProject ? [p.title] : []) : [],
       time: fmt.short(a.at),
       attachment: a.attachment || null,
@@ -312,7 +333,6 @@
     const sections = treeSections(cfg);
     const nav = UI.sideNav({ label: 'Projects', navLabel: 'Project tree', sections });
     const scroll = nav.querySelector('.jay-side-scroll');
-    scroll.setAttribute('aria-label', 'Project tree');
     const secEls = Array.from(scroll.querySelectorAll(':scope > .jay-side-section'));
     secEls.forEach((el, i) => {
       const sec = sections[i];
@@ -568,11 +588,12 @@
     const fav = isFav(p, ctx.prefs);
     const muted = isMuted(p, ctx.prefs);
     const st = statusOf(p);
-    return UI.box({ class: 'jay-pj-head' },
+    // data-status: phones show the status pill only for a project that is not running.
+    return UI.box({ class: 'jay-pj-head', 'data-status': STATUS[p.status] ? p.status : 'other' },
       ctx.back ? h('button', { type: 'button', class: 'jay-icon-btn jay-pj-back', 'aria-label': 'All projects', onclick: ctx.onBack }, icon('arrow-left', 18)) : null,
-      h('div', { class: 'jay-pj-head-main' },
+      edgeFade(h('div', { class: 'jay-pj-head-main' },
         h('div', { class: 'jay-pj-title-row' }, h('h2', { class: 'jay-pj-title' }, p.title), UI.dotPill(st.label, st.hue)),
-        crumbs(p.streams, ctx.onStream, ctx.stream)),
+        crumbs(p.streams, ctx.onStream, ctx.stream))),
       h('div', { class: 'jay-pj-head-tools' },
         h('button', {
           type: 'button', class: ['jay-icon-btn', 'jay-pj-tool', muted ? 'is-on' : ''], 'aria-pressed': muted ? 'true' : 'false',
@@ -595,6 +616,7 @@
       b.id = ctx.uid + '-tab-' + b.dataset.tab;
       b.setAttribute('aria-controls', ctx.uid + '-panel');
     });
+    edgeFade(tabs);
     const people = list(p.people);
     return UI.box({ class: 'jay-pj-tabbar' }, tabs,
       h('div', { class: 'jay-pj-team' },
@@ -679,7 +701,7 @@
         h('span', null, 'Stream'),
         h('button', { type: 'button', class: 'jay-pj-chip', 'aria-label': 'Clear stream filter: ' + ctx.stream, 'data-pj-tool': 'feed-stream', onclick: () => ctx.onStream(ctx.stream) }, h('span', null, ctx.stream), icon('x', 13))) : null,
       h('div', { class: 'jay-pj-feed-list' }, shown.length
-        ? shown.map((a) => feedCard(a, p, { since: muted ? undefined : stats.since, requests: ctx.requests, onAnswer: ctx.onAnswer }))
+        ? shown.map((a) => feedCard(a, p, { since: muted ? undefined : stats.since, requests: ctx.requests, onAnswer: ctx.onAnswer, onStream: ctx.pickStream }))
         : UI.state('empty', { icon: 'history', title: ctx.feed === 'mentions' ? 'No mentions yet.' : (ctx.stream ? 'No activity in ' + ctx.stream + ' yet.' : 'No activity yet.'), compact: true })));
   }
 
@@ -786,6 +808,7 @@
 
     const side = UI.sideNav({
       label: 'Projects',
+      navLabel: 'Project tree',
       search: { placeholder: 'Search projects', onInput: (v) => { ctx.query = v; drawTree(); } },
       sections: [],
       footer: { label: 'Add Project', icon: 'plus', run: openCreate },
@@ -850,6 +873,19 @@
       if (ctx.stream) ctx.streamsOpen = true;
       keepFocus(() => { drawTree(); drawMain(); drawAside(); }, '.jay-pj-tabbar .jay-tab.is-active');
     }
+    // A feed target without a task opens its stream (never toggles it off).
+    // From the Activity tab it also shows the stream's tasks. Focus lands on
+    // the "Stream: X ×" chip that now says what is filtered: the Tasks
+    // toolbar's after leaving the Activity tab, else the feed's own.
+    function pickStream(s) {
+      const fromTab = ctx.tab === ACTIVITY;
+      ctx.stream = s;
+      ctx.streamsOpen = true;
+      if (fromTab) { ctx.tab = 'tasks'; savePrefs({ tab: 'tasks' }); syncUrl(); }
+      drawTree(); drawMain(); drawAside();
+      const chip = layout.querySelector(fromTab ? '[data-pj-tool="stream-chip"]' : '[data-pj-tool="feed-stream"]');
+      if (chip) chip.focus({ preventScroll: true });
+    }
     function toggle(kind) {
       if (!project) return;
       const pfx = prefs();
@@ -882,7 +918,7 @@
       get tab() { return ctx.tab; }, get view() { return ctx.view; }, get filter() { return ctx.filter; }, get feed() { return ctx.feed; },
       get stream() { return ctx.stream; }, get back() { return ctx.back; }, get withAside() { return ctx.withAside; },
       get shift() { return ctx.shift; }, get requests() { return ctx.requests; }, get prefs() { return drawPf || prefs(); }, uid,
-      onTab: setTab, onStream: setStream, toggle, onBack: back,
+      onTab: setTab, onStream: setStream, pickStream, toggle, onBack: back,
       onView: (v) => { ctx.view = v; savePrefs({ view: v }); keepFocus(drawMain); },
       onFilter: (f) => { ctx.filter = f; savePrefs({ filter: f }); drawMain(); const b = layout.querySelector('.jay-pj-filter'); if (b) b.focus({ preventScroll: true }); },
       onFeed: (f) => { ctx.feed = f; keepFocus(drawFeed); },
@@ -919,6 +955,8 @@
       const boardLeft = boardEl ? boardEl.scrollLeft : 0;
       const tlEl = main.querySelector('.jay-pj-tl-scroll');
       const tlLeft = tlEl ? tlEl.scrollLeft : 0;
+      const tabsEl = main.querySelector('.jay-pj-tabbar > .jay-tabs');
+      const tabsLeft = tabsEl ? tabsEl.scrollLeft : 0;
       const tabFocus = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('jay-tab') && main.contains(document.activeElement) && !document.activeElement.closest('.jay-pj-feed') ? document.activeElement.dataset.tab : null;
       const panel = h('div', { class: ['jay-pj-scroll', 'is-' + ctx.tab], id: uid + '-panel', role: 'tabpanel', 'aria-labelledby': uid + '-tab-' + ctx.tab }, content());
       mount(main, headPanel(project, ctxApi), tabsPanel(project, ctxApi), panel);
@@ -927,6 +965,18 @@
       if (nb) nb.scrollLeft = boardLeft;
       const nt = main.querySelector('.jay-pj-tl-scroll');
       if (nt) nt.scrollLeft = tlLeft;
+      // A scrolled tab strip (phones) stays put, with the active tab in view.
+      const ns = main.querySelector('.jay-pj-tabbar > .jay-tabs');
+      if (ns) {
+        ns.scrollLeft = tabsLeft;
+        const at = ns.querySelector('.jay-tab.is-active');
+        if (at) {
+          const pad = 24;
+          if (at.offsetLeft - pad < ns.scrollLeft) ns.scrollLeft = Math.max(0, at.offsetLeft - pad);
+          else if (at.offsetLeft + at.offsetWidth + pad > ns.scrollLeft + ns.clientWidth) ns.scrollLeft = at.offsetLeft + at.offsetWidth + pad - ns.clientWidth;
+        }
+        if (ns.syncFade) ns.syncFade();
+      }
       if (tabFocus) { const b = main.querySelector('.jay-pj-tabbar .jay-tab[data-tab="' + tabFocus + '"]'); if (b) b.focus({ preventScroll: true }); }
     }
     function drawAside() { if (project && aside) drawing(paintAside); }
@@ -953,6 +1003,17 @@
       if (target === card) card.tabIndex = -1;
       target.focus({ preventScroll: true });
     }
+    // The portfolio line stays in the header and the project names the
+    // browser tab ("Hermes / Jay · JAY"). Phones have only the app bar's
+    // title line, so there it names the project (the panel drops its title).
+    function projectHeader() {
+      if (!project) return;
+      portfolioHeader(projects, JAY.isMobile()
+        ? { title: project.title, docTitle: project.title, back: { label: 'All projects', run: back } }
+        : { docTitle: project.title, back: null });
+    }
+    const onMobileMq = () => { if (!disposed) projectHeader(); };
+    if (JAY.mqMobile) JAY.mqMobile.addEventListener('change', onMobileMq);
     function showState(node) {
       layout.classList.add('is-state');
       mount(main, node);
@@ -978,12 +1039,13 @@
         if (disposed || my !== seq) return;
         if (res && res.__state) { showState(stateBox(res.__state)); return; }
         projects = list(res);
-        portfolioHeader(projects);
+        if (!project) portfolioHeader(projects);
         const pf = prefs();
         const fallback = projects.find((p) => isFav(p, pf)) || projects[0];
         const currentId = id || (fallback ? fallback.id : null);
         if (!currentId) {
           project = null;
+          portfolioHeader(projects);
           drawTree();
           showState(UI.box({ class: 'jay-pj-empty' }, UI.state('empty', { icon: 'projects', title: 'No projects yet.', text: 'Start one here or ask Jay to set it up for you.', action: { label: 'New project', icon: 'plus', run: openCreate } })));
           return;
@@ -992,6 +1054,7 @@
         if (disposed || my !== seq) return;
         if (!p || p.__state) {
           project = null;
+          portfolioHeader(projects);
           drawTree();
           showState(dataState(p, 'Project not found.', { label: 'All projects', run: () => { location.hash = '#/projects'; } }));
           return;
@@ -1003,8 +1066,7 @@
         drawTree();
         drawMain();
         drawAside();
-        // The project names the browser tab; the header stays "Projects".
-        portfolioHeader(projects, { docTitle: p.title });
+        projectHeader();
         // A project route shows its tab in the address bar (an unknown or
         // folded-away ?tab is replaced); the bare #/projects route stays bare.
         if (first && (id || params.tab) && (params.tab || '') !== (ctx.tab === 'tasks' ? '' : ctx.tab)) syncUrl();
@@ -1017,7 +1079,11 @@
     loadReq();
     const offs = ['data:projects', 'data:tasks', 'data:people'].map((e) => JAY.on(e, () => load(true)));
     offs.push(JAY.on('data:attention', loadReq));
-    return () => { disposed = true; offs.forEach((off) => off()); };
+    return () => {
+      disposed = true;
+      offs.forEach((off) => off());
+      if (JAY.mqMobile) JAY.mqMobile.removeEventListener('change', onMobileMq);
+    };
   }
 
   function render(root, params) {
@@ -1070,7 +1136,7 @@
           open.length ? h('ul', { class: 'jay-pj-next' }, open.slice(0, 5).map((t) => nextRow(t, () => panel.close()))) : h('div', { class: 'jay-empty-line' }, 'No open tasks.')),
         h('section', { class: 'jay-pj-pv-sec' },
           h('div', { class: 'jay-pj-pv-head' }, h('h3', { class: 'jay-pj-pv-title' }, 'Recent activity')),
-          list(p.activity).length ? h('div', { class: 'jay-pj-pv-feed' }, list(p.activity).slice(0, 3).map((a) => feedCard(a, p))) : h('div', { class: 'jay-empty-line' }, 'No activity yet.')),
+          list(p.activity).length ? h('div', { class: 'jay-pj-pv-feed' }, list(p.activity).slice(0, 3).map((a) => feedCard(a, p, { onProject: () => { panel.close(); go(p.id); } }))) : h('div', { class: 'jay-empty-line' }, 'No activity yet.')),
         list(p.people).length ? h('section', { class: 'jay-pj-pv-sec' },
           h('div', { class: 'jay-pj-pv-head' }, h('h3', { class: 'jay-pj-pv-title' }, 'People'), UI.avatarStack(list(p.people), { max: 4, size: 'sm' })),
           peopleRows(list(p.people))) : null);

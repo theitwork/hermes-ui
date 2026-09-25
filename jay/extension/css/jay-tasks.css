@@ -37,14 +37,6 @@
 .jay-due.is-overdue { color: var(--jay-danger); font-weight: 600; }
 .jay-due.is-today { color: var(--jay-accent-text); font-weight: 600; }
 .jay-due.is-later, .jay-due.is-none, .jay-due.is-done { color: var(--jay-muted); }
-.jay-proj-tag { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--jay-text-2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Project tone dot: the tone (1–5) only picks a class, never an inline style. */
-.jay-tone-dot { --jay-h: var(--jay-hue-neutral); width: 8px; height: 8px; border-radius: 2.5px; background: var(--jay-h); flex-shrink: 0; }
-.jay-tone-dot.is-tone-1 { --jay-h: var(--jay-tone-1); }
-.jay-tone-dot.is-tone-2 { --jay-h: var(--jay-tone-2); }
-.jay-tone-dot.is-tone-3 { --jay-h: var(--jay-tone-3); }
-.jay-tone-dot.is-tone-4 { --jay-h: var(--jay-tone-4); }
-.jay-tone-dot.is-tone-5 { --jay-h: var(--jay-tone-5); }
 .jay-prio-wrap { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--jay-text-2); }
 .jay-prio { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
 .jay-prio i { width: 3px; border-radius: 1px; background: var(--jay-meter-off); }
@@ -70,11 +62,13 @@
 .jay-tcount { display: inline-flex; align-items: center; gap: 4px; }
 .jay-tcounts.is-lg { font-size: 12.5px; gap: 12px; }
 
-/* "▢ Sep 22 | Comment" (CRM "Last Interaction") */
-.jay-lastev { display: inline-flex; align-items: center; gap: 7px; color: var(--jay-text); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.jay-lastev > .jay-icon { color: var(--jay-text-2); flex-shrink: 0; }
-.jay-lastev-sep { width: 1px; height: 12px; background: var(--jay-border-strong); flex-shrink: 0; }
-.jay-lastev-label { color: var(--jay-text); }
+/* "▢ Sep 22 | Comment" (CRM "Last Interaction"): the shared JAY.ui.dateCell,
+   tuned for the Tasks table and drawer — 13px text, a 14px icon, a thin
+   vertical rule for the "|" (as the CRM draws it) and a full-strength label. */
+.jay-lastev.jay-date-cell { gap: 7px; color: var(--jay-text); font-size: 13px; }
+.jay-lastev.jay-date-cell > .jay-icon { width: 14px; height: 14px; color: var(--jay-text-2); }
+.jay-lastev.jay-date-cell > .jay-sep { width: 1px; height: 12px; padding: 0; overflow: hidden; background: var(--jay-border-strong); color: transparent; font-size: 0; line-height: 0; flex-shrink: 0; }
+.jay-lastev.jay-date-cell > .jay-date-cell-l { color: var(--jay-text); }
 
 /* Lime square checkbox (CRM row select), drawn with borders so no image or
    hard-coded colour is needed. */
@@ -176,6 +170,19 @@
    Phones also get the "Filter · Sort" pill at its start. */
 .jay-tchips-row { display: none; align-items: center; gap: 6px; min-width: 0; padding: 12px 20px 0; }
 .jay-tchips { display: flex; flex: 1 1 auto; gap: 6px; min-width: 0; }
+/* Sideways strips fade the edge with more to show (is-fade-*, set in jay-tasks.js). */
+:is(.jay-tpills, .jay-tchips).is-fade-end {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+}
+:is(.jay-tpills, .jay-tchips).is-fade-start {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+}
+:is(.jay-tpills, .jay-tchips).is-fade-start.is-fade-end {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
 .jay-tchip {
   display: inline-flex;
   align-items: center;
@@ -286,7 +293,7 @@
 .jay-ttable .c-status .jay-dotpill { height: 22px; padding: 0 2px 0 0; border-color: transparent; background: transparent; }
 .jay-ttable .c-progress .jay-meter { gap: 7px; }
 .jay-ttable .c-progress .jay-meter-val { min-width: 3.4ch; }
-.jay-ttable .jay-lastev { gap: 6px; }
+.jay-ttable .jay-lastev.jay-date-cell { gap: 6px; }
 /* The "+N" chip that stands in for tags the narrow table drops (tagsCell). */
 .jay-tags > .jay-tag.is-collapsed { display: none; }
 

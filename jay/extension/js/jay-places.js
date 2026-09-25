@@ -17,22 +17,14 @@
     if (has('shell', 'setHeader')) JAY.shell.setHeader(Object.assign({ route }, cfg));
   }
   function go(hash) { location.hash = hash; }
-  // Open Talk and focus the composer in the same gesture (a phone opens its
-  // keyboard on the first tap). `text` is added to the draft, never replacing
-  // what the user typed; `intent` primes a mode such as "idea".
-  function talk(text, intent) {
-    if (text) {
-      if (has('chat', 'prefill')) JAY.chat.prefill(text);
-      else if (JAY.chat && JAY.chat.shared) JAY.chat.shared.draft = text;
-    }
-    if (!has('shell', 'navigate')) {
-      go('#/talk');
-      if (intent && has('chat', 'prime')) setTimeout(() => JAY.chat.prime(intent), 80);
-      return;
-    }
-    JAY.shell.navigate('#/talk');
-    if (intent && has('chat', 'prime')) JAY.chat.prime(intent);
-    if (has('chat', 'focus')) JAY.chat.focus();
+  // Open Talk through Home's goTalk: the composer takes focus in the same
+  // gesture (a phone opens its keyboard on the first tap), `draft` is added
+  // to what the user typed, `intent` primes a mode such as "idea".
+  function talk(req) {
+    const r = req || {};
+    if (has('home', 'goTalk')) { JAY.home.goTalk(r); return; }
+    if ((r.draft || r.intent) && has('chat', 'prefill')) JAY.chat.prefill(r.draft || null, r.intent ? { intent: r.intent } : {});
+    go('#/talk');
   }
   function panelHead(title, opts) {
     const o = opts || {};
@@ -54,7 +46,7 @@
       setHeader('talk', { title: 'Talk to Jay', pill: { label: 'Preview', hue: 'lime' }, crumbs: [] });
       // Focus now, while a tap that opened Talk is still the current gesture
       // (phones only when something was asked), with a late retry for layout.
-      const want = () => !JAY.isMobile() || JAY.chat.shared.intent || JAY.chat.shared.draft;
+      const want = () => !JAY.isMobile() || JAY.chat.shared.focusNext || JAY.chat.shared.intent || JAY.chat.shared.draft;
       if (want()) chat.focus();
       const t = setTimeout(() => { if (want() && !chat.el.contains(document.activeElement)) chat.focus(); }, 60);
       return () => { clearTimeout(t); chat.destroy(); };
@@ -170,7 +162,7 @@
     bullets: ['Events alongside tasks and reminders', 'Conflicts surfaced in Attention', 'Ask Jay to find time or reschedule'],
     connect: 'Connect Calendar',
     crumbs: ['Week view'],
-    primary: { label: 'Ask Jay to plan my day', icon: 'chat', run: () => talk('Plan my day around my calendar and tasks') },
+    primary: { label: 'Ask Jay to plan my day', icon: 'chat', run: () => talk({ draft: 'Plan my day around my calendar and tasks' }) },
     preview: calendarPreview,
   });
 
@@ -180,7 +172,7 @@
     text: 'Notes will collect ideas, meeting notes and research from your conversations with Jay and link them to projects and people.',
     bullets: ['Ideas captured from chat or voice', 'Linked to projects and people', 'Searchable alongside Hermes memory'],
     crumbs: ['Sample notes from your projects'],
-    primary: { label: 'Capture an idea', icon: 'lightbulb', run: () => talk(null, 'idea') },
+    primary: { label: 'Capture an idea', icon: 'lightbulb', run: () => talk({ intent: 'idea' }) },
     preview: notesPreview,
   });
 
@@ -327,7 +319,7 @@
             statusPill),
           statusBox),
         UI.box({ class: 'jay-sys-card is-auto' },
-          panelHead('Automations', { icon: 'automations', sub: 'Runs over the last 14 days', actions: [h('button', { type: 'button', class: 'jay-link', onclick: () => go('#/automations') }, 'Scheduled jobs', icon('chevron-right', 14))] }),
+          panelHead('Automations', { icon: 'automations', sub: 'Runs, last 14 days', actions: [h('button', { type: 'button', class: 'jay-link', onclick: () => go('#/automations') }, 'Scheduled jobs', icon('chevron-right', 14))] }),
           autoBox),
         UI.box({ class: 'jay-sys-card is-hermes' },
           panelHead('Hermes', { icon: 'server', sub: 'The full Hermes WebUI is still here, unchanged. These open the real Hermes panels.', actions: [UI.dotPill('Live', 'green')] }),
@@ -380,18 +372,24 @@
       const offSource = JAY.on('data:system', syncSource);
 
       const w1 = JAY.widget(statusBox, {
-        name: 'system-status', domains: ['system'], load: () => JAY.data.getSystemStatus(), isEmpty: () => false, skeletonRows: 5,
+        name: 'system-status', domains: ['system'], load: () => JAY.data.getSystemStatus(), skeletonRows: 5,
+        isEmpty: (s) => !s || !Array.isArray(s.items) || !s.items.length,
+        empty: { icon: 'system', title: 'No services reported.', text: 'The status source returned nothing to show.', compact: true, action: { label: 'Check now', icon: 'refresh', run: () => w1.refresh() } },
         render: (st) => h('div', { class: 'jay-sys-status' },
           h('ul', { class: 'jay-sys-rows' }, list(st.items).map((it) => {
             const disk = /(\d{1,3})%\s*disk/i.exec(it.detail || '');
+            const used = disk ? Math.min(100, Number(disk[1])) : 0;
+            // Disk is a "used" gauge: one flat colour, amber from 75%, red from 90%.
+            const tone = used >= 90 ? 'danger' : (used >= 75 ? 'warning' : undefined);
             return h('li', { class: 'jay-sys-row' },
               h('span', { class: 'jay-sys-ic', 'aria-hidden': 'true' }, icon(STATUS_ICON[it.key] || 'circle', 15)),
               h('span', { class: 'jay-sys-main' }, h('span', { class: 'jay-sys-name' }, it.label), h('span', { class: 'jay-sys-detail' }, it.detail || '')),
-              disk ? h('span', { class: 'jay-sys-meter' }, UI.meter(Number(disk[1]), { segments: 12, label: 'Disk used', ramp: false })) : h('span', { class: 'jay-sys-meter' }),
+              disk ? h('span', { class: 'jay-sys-meter' }, UI.meter(used, Object.assign({ segments: 12, label: 'Disk used', ramp: false }, tone ? { tone } : {}))) : h('span', { class: 'jay-sys-meter' }),
               UI.dotPill(it.value, STATE_HUE[it.state] || 'neutral'));
           })),
           h('div', { class: 'jay-sys-foot' },
-            h('span', null, 'Last check ', h('strong', null, fmt.time(st.checkedAt))),
+            // No "NaN:NaN": the time shows only when the source gave a valid one.
+            st.checkedAt && Number.isFinite(new Date(st.checkedAt).getTime()) ? h('span', null, 'Last check ', h('strong', null, fmt.time(st.checkedAt))) : null,
             h('span', { class: 'jay-spacer' }),
             h('button', { type: 'button', class: 'jay-btn is-inset is-sm', onclick: () => w1.refresh() }, icon('refresh', 14), 'Check now'))),
         states: { disconnected: { title: 'Status service unreachable', compact: true } },
@@ -418,10 +416,12 @@
           if (items && items.__state) return items;
           return list(items).filter((a) => a.source === 'automation');
         },
+        // A target opens the Attention item (Home's drawer), else the jobs list.
         render: (items) => items.map((a) => UI.feedItem({
           who: a.actor ? { id: a.actor, name: a.actor === 'jay' ? 'Jay' : (a.personName || a.actor) } : null,
           icon: a.icon || 'automations', hue: a.hue || (a.level === 'critical' ? 'red' : 'neutral'),
           verb: a.verb || a.title, target: a.verb ? a.target : null,
+          onTarget: () => { if (has('home', 'openAttention')) JAY.home.openAttention(a); else go('#/automations'); },
           context: list(a.context), time: fmt.short(a.at), attachment: a.attachment || null,
           level: a.level, unread: a.level === 'critical',
         })),

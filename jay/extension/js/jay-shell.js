@@ -105,10 +105,18 @@
   }
   // Public: navigate synchronously (the view is rendered when this returns), so a
   // caller can focus something in the new view inside the same user gesture.
+  // `target` is a route ('projects', '#/projects/x?tab=y'); `params` (same
+  // shape as replaceParams: `_` is the already-encoded path remainder, the
+  // rest become the query) replaces whatever path and query `target` carried.
+  // `replace` swaps the current history entry instead of adding one.
   function navigate(target, opts) {
     if (!alive()) return;
     const o = opts || {};
-    const hash = toHash(target);
+    let hash = toHash(target);
+    if (o.params && typeof o.params === 'object') {
+      const name = hash.slice(2).split('?')[0].split('/')[0] || 'home';
+      hash = buildHash(name, o.params);
+    }
     const url = location.pathname + location.search + hash;
     if (o.replace) history.replaceState(history.state, '', url);
     else if (location.hash !== hash) history.pushState(cleanHistoryState(), '', url);
@@ -354,7 +362,7 @@
     let settled = false;
     const lookup = lookupUser();
     lookup.then((u) => {
-      if (!settled || !u || !alive() || (JAY.me && JAY.me.id === u.id && JAY.me.name === u.name)) return;
+      if (!settled || !u || !alive() || sameUser(JAY.me, u)) return;
       JAY.me = u;
       applyIdentity();
     });
@@ -363,6 +371,17 @@
       settled = true;
       if (u) JAY.me = u;
       else if (!JAY.me) JAY.me = FALLBACK_ME;
+      applyIdentity();
+    });
+  }
+  function sameUser(a, b) { return !!(a && b && a.id === b.id && a.name === b.name && a.context === b.context); }
+  // The people domain changed (demo reset, a cleared "loading"/"error"
+  // simulation, another adapter): pick up a user the start-up lookup missed.
+  // A failed lookup keeps the user JAY already knows.
+  function refreshUser() {
+    lookupUser().then((u) => {
+      if (!u || !alive() || sameUser(JAY.me, u)) return;
+      JAY.me = u;
       applyIdentity();
     });
   }
@@ -631,7 +650,7 @@
   }
 
   /* ── Header panel ──────────────────────────────────────────────────── */
-  const header = { epoch: 0, title: '', titleSet: false, pill: null, crumbs: [], crumbsSet: false };
+  const header = { epoch: 0, title: '', titleSet: false, pill: null, crumbs: [], crumbsSet: false, back: null };
 
   function defaultTitle(route) {
     if (route === 'home') return fmt.greeting() + (JAY.me && JAY.me !== FALLBACK_ME ? ', ' + JAY.me.name : '');
@@ -662,10 +681,43 @@
     if (typeof c.run === 'function') return h('button', { type: 'button', class: ['jay-crumb', 'is-link', tone], onclick: safe(c.run) }, body);
     return h('span', { class: ['jay-crumb', tone] }, body);
   }
+  function normalizeBack(b) {
+    if (!b || typeof b !== 'object' || typeof b.run !== 'function') return null;
+    const label = b.label === undefined || b.label === null || b.label === '' ? 'Back' : String(b.label);
+    return { label, run: b.run };
+  }
+  // Phones: the view's own "up" step, as a chevron before the app bar brand.
+  // Navigation, so the next page is announced (settleNavFocus).
+  function runBack() {
+    const b = header.back;
+    if (!b || !alive() || state.mode !== 'jay') return;
+    nav.focus = true;
+    safe(b.run)();
+  }
+  function applyBack() {
+    const btn = els.appbarBack;
+    if (!btn) return;
+    const b = header.back;
+    const hadFocus = document.activeElement === btn;
+    btn.hidden = !b;
+    if (b) btn.setAttribute('aria-label', b.label); else btn.removeAttribute('aria-label');
+    els.header.classList.toggle('has-back', !!b);
+    // The button leaves with the page that set it: keep focus in the app bar
+    // (on the brand, where the chevron was) instead of dropping it to <body>.
+    if (hadFocus && !b) {
+      requestAnimationFrame(() => {
+        if (!alive() || !btn.hidden) return;
+        const ae = document.activeElement;
+        if (ae && ae !== btn && ae !== document.body) return;
+        if (els.appbarBrand && els.appbarBrand.offsetParent !== null) els.appbarBrand.focus({ preventScroll: true });
+      });
+    }
+  }
   function applyHeader() {
     if (!els.headTitle) return;
     els.headTitle.textContent = header.title || '';
     if (els.appbarTitle) els.appbarTitle.textContent = state.route === 'home' ? 'JAY' : (header.title || 'JAY');
+    applyBack();
     const pill = header.pill ? JAY.ui.dotPill(header.pill.label, header.pill.hue) : null;
     mount(els.headPill, pill);
     els.headPill.hidden = !pill;
@@ -696,6 +748,7 @@
     header.pill = null;
     header.crumbs = route === 'home' ? [fmt.dayLong(new Date())] : [];
     header.crumbsSet = false;
+    header.back = null;
     applyHeader();
     setDocTitle(JAY.views[route] ? pageName(route) : '');
     if (route === 'home') loadHomeSummary(header.epoch);
@@ -704,6 +757,9 @@
   // Public: views call this after rendering. Fields that are present replace
   // the current value (pill: null clears, crumbs: [] clears, title: null resets).
   // `docTitle` names the browser tab when it should differ from the title.
+  // `back: { label, run }` adds a back chevron before the phone app bar's
+  // title (label is its accessible name; back: null removes it). It is cleared
+  // on every route change, so a view sets it again after each render.
   // Pass `route` to have late async calls from a previous view ignored.
   function setHeader(cfg) {
     try {
@@ -721,6 +777,7 @@
         header.crumbs = Array.isArray(cfg.crumbs) ? cfg.crumbs.slice(0, 8) : [];
         header.crumbsSet = true;
       }
+      if ('back' in cfg) header.back = normalizeBack(cfg.back);
       applyHeader();
     } catch (err) { console.warn('[jay] setHeader failed', err); }
   }
@@ -771,10 +828,14 @@
     els.headCrumbs = h('div', { class: 'jay-header-crumbs', hidden: true });
     els.appbarTitle = h('span', { class: 'jay-appbar-title' }, 'JAY');
     els.headerMe = h('button', { type: 'button', class: 'jay-header-me', 'aria-label': 'Account', 'aria-haspopup': 'menu', onclick: (e) => profileMenu(e.currentTarget) });
+    // Phones only (CSS): the view's back step, shown while a view sets `back`.
+    els.appbarBack = h('button', { type: 'button', class: 'jay-appbar-back', hidden: true, onclick: runBack }, icon('chevron-left', 22));
+    // Phones: compact app bar brand (lime tile + wordmark / page title).
+    els.appbarBrand = h('button', { type: 'button', class: 'jay-appbar-brand', 'aria-label': 'JAY Home', onclick: () => go('home') },
+      h('span', { class: 'jay-mark is-sm', 'aria-hidden': 'true' }, 'J'), els.appbarTitle);
     els.header = h('header', { class: 'jay-header jay-box' },
-      // Phones: compact app bar brand (lime tile + wordmark / page title).
-      h('button', { type: 'button', class: 'jay-appbar-brand', 'aria-label': 'JAY Home', onclick: () => go('home') },
-        h('span', { class: 'jay-mark is-sm', 'aria-hidden': 'true' }, 'J'), els.appbarTitle),
+      els.appbarBack,
+      els.appbarBrand,
       h('div', { class: 'jay-header-main' },
         h('div', { class: 'jay-header-row' }, els.headTitle, els.headPill),
         els.headCrumbs),
@@ -946,6 +1007,8 @@
       rememberScroll();
       if (state.dispose) { try { state.dispose(); } catch (_) { /* ignore */ } state.dispose = null; }
       JAY.ui.closeMenu();
+      // The disposed view's back step must not survive into Hermes mode.
+      if (header.back) { header.back = null; applyBack(); }
       nav.cause = null;
       nav.focus = false;
       nav.popAt = 0;
@@ -1033,6 +1096,7 @@
     listen(JAY.mqMobile, 'change', () => { state.mobile = JAY.isMobile(); rerender(); syncThemeColor(); });
     run.offs.push(JAY.on('route:rerender', rerender));
     ['attention', 'tasks'].forEach((d) => run.offs.push(JAY.on('data:' + d, updateBadges)));
+    ['data:people', 'data:reset'].forEach((ev) => run.offs.push(JAY.on(ev, refreshUser)));
     ['data:today', 'data:tasks'].forEach((ev) => run.offs.push(JAY.on(ev, () => { if (state.mode === 'jay' && state.route === 'home') loadHomeSummary(header.epoch); })));
     const themeMo = new MutationObserver(() => { syncThemeButtons(); requestAnimationFrame(syncThemeColor); });
     themeMo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-skin'] });
@@ -1055,7 +1119,11 @@
     if (state.dispose) { try { state.dispose(); } catch (_) { /* ignore */ } state.dispose = null; }
     try { JAY.ui.closeMenu(); } catch (_) { /* ignore */ }
     ['jayTitlebarHome', 'jayDrawerHome'].forEach((id) => { const el = document.getElementById(id); if (el) el.remove(); });
+    header.back = null;
     state.mode = 'off';
+    // Hermes owns its title and browser-chrome colour again.
+    if (hermesTitle && document.title !== hermesTitle) document.title = hermesTitle;
+    if (typeof window._syncThemeColorMeta === 'function') { try { window._syncThemeColorMeta(); } catch (_) { /* ignore */ } }
   }
   function fallBackToHermes(err) {
     console.error('[jay] failed to start; falling back to Hermes', err);
@@ -1065,7 +1133,6 @@
     delete document.documentElement.dataset.jayMode;
     delete document.documentElement.dataset.jayRoute;
     document.querySelectorAll('.app-titlebar, .layout').forEach((el) => { el.inert = false; });
-    if (hermesTitle) document.title = hermesTitle;
   }
 
   function start() {

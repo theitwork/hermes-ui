@@ -46,6 +46,10 @@
 .jay-hp-sub { margin-top: 1px; padding: 1px 0; font-size: 12.5px; line-height: 19px; color: var(--jay-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .jay-hp-sub:empty { display: none; }
 .jay-hp-head > .jay-badge { margin-left: 2px; }
+/* Today's sub-line: the next title shortens, its time stays whole. */
+.jay-today-sub { display: flex; min-width: 0; }
+.jay-today-sub-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.jay-today-sub-at { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .jay-hp-tools { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 /* Top-row recipe (Today · Talk · Attention): 66px head, title on the first line
    at the same y in all three, controls centred on the title line, no divider. */
@@ -559,14 +563,13 @@ button.jay-cchip:hover { color: var(--jay-text); border-color: var(--jay-border-
 .jay-talk.is-focus .jay-talk-scroll { padding-top: 28px; --jay-talk-fade: 22px; }
 .jay-talk.is-focus .jay-talk-foot { padding-bottom: 18px; }
 @media (min-width: 768px) {
-  /* Head, thread, chips and composer share one centred 760px column; Back
-     sits in the panel's own left gutter. */
+  /* The rail is on screen from 768px, so it is the way back: no Back button. */
+  .jay-talk-back { display: none; }
+  /* Head, thread, chips and composer share one centred 760px column. */
   .jay-talk.is-focus .jay-talk-head {
-    position: relative;
-    padding-left: max(62px, calc((100% - 760px) / 2));
+    padding-left: max(24px, calc((100% - 760px) / 2));
     padding-right: max(24px, calc((100% - 760px) / 2));
   }
-  .jay-talk.is-focus .jay-talk-back { position: absolute; left: 14px; top: 17px; margin: 0; }
   /* The page header already says "Talk to Jay ● Preview": one Preview pill is enough. */
   .jay-app:has(.jay-header-pill:not([hidden]) > .jay-dotpill) .jay-talk.is-focus .jay-talk-pill { display: none; }
 }

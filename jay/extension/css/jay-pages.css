@@ -79,8 +79,9 @@
 }
 .jay-pj-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin-top: 6px; min-width: 0; }
 .jay-pj-crumb-i { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
-/* Separator drawn as a hairline so it centres on the text (a "|" glyph sits low). */
-.jay-pj-crumb-i > .jay-sep { width: 1px; height: 12px; padding: 0; background: var(--jay-border-strong); font-size: 0; line-height: 0; flex-shrink: 0; }
+/* "|" separator in the muted tone, drawn as a hairline so it centres on the
+   text (the glyph sits low in the display face). */
+.jay-pj-crumb-i > .jay-sep { width: 1px; height: 12px; padding: 0; background: var(--jay-muted); font-size: 0; line-height: 0; flex-shrink: 0; }
 .jay-pj-crumb {
   font-family: var(--jay-font-display);
   font-size: 13px;
@@ -103,26 +104,40 @@ button.jay-pj-crumb.is-active:hover { color: var(--jay-accent-text); }
 .jay-pj-tool:disabled { opacity: 0.4; pointer-events: none; }
 
 .jay-pj-tabbar { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 0 16px 0 6px; }
-.jay-pj-tabbar > .jay-tabs { flex: 1 1 auto; align-self: stretch; }
+.jay-pj-tabbar > .jay-tabs { position: relative; flex: 1 1 auto; align-self: stretch; }
+/* A strip with more to show fades that edge (is-fade-start / is-fade-end, set
+   by edgeFade in jay-projects.js): the phone tab strip and phone crumbs. */
+:is(.jay-pj-tabbar > .jay-tabs, .jay-pj-head-main).is-fade-end {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+}
+:is(.jay-pj-tabbar > .jay-tabs, .jay-pj-head-main).is-fade-start {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+}
+:is(.jay-pj-tabbar > .jay-tabs, .jay-pj-head-main).is-fade-start.is-fade-end {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
 .jay-pj-tabbar > .jay-tabs.is-boxed { padding: 0 18px; gap: 30px; }
 .jay-pj-tabbar .jay-tabs.is-boxed .jay-tab { height: 64px; font-size: 14px; }
 .jay-pj-team { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
 .jay-pj-team .jay-av-stack > .jay-av { border-radius: 10px; }
 .jay-pj-team .jay-av-stack > .jay-av + .jay-av { margin-left: 4px; }
 .jay-pj-team .jay-av-stack > .jay-av { box-shadow: none; }
-/* Deepsleep "+" tile: an inset square with a lime plus, no outline. */
+/* Deepsleep "+" tile: a borderless inset square with a lime plus. */
 .jay-pj-invite {
   display: inline-grid;
   place-items: center;
   width: 34px;
   height: 34px;
+  border: 0;
   border-radius: var(--jay-r-md);
   background: var(--jay-inset);
   color: var(--jay-accent-text);
   flex-shrink: 0;
   transition: background var(--jay-dur) var(--jay-ease);
 }
-:root:not(.dark) .jay-pj-invite { box-shadow: inset 0 0 0 1px var(--jay-border-strong); }
 .jay-pj-invite:hover { background: var(--jay-accent-softer); }
 
 /* ── Tasks tab: view toggle, stream chip + filter on the canvas, then the kanban ── */
@@ -167,11 +182,15 @@ button.jay-pj-crumb.is-active:hover { color: var(--jay-accent-text); }
 .jay-pj-toolbar > .jay-pj-chip { margin-left: 4px; }
 
 .jay-pj-board { min-width: 0; }
-.jay-pj-board > .jay-board { grid-auto-columns: minmax(190px, 1fr); gap: 12px; padding: 0 0 6px; scrollbar-width: thin; }
+/* One track per column (--jay-kcols from renderBoard), shared evenly: the
+   board never runs past its panel (phones scroll it, see below). */
+.jay-pj-board > .jay-board { grid-template-columns: repeat(var(--jay-kcols, 3), minmax(0, 1fr)); grid-auto-columns: minmax(0, 1fr); gap: 12px; padding: 0 0 6px; scrollbar-width: thin; }
 .jay-pj-board .jay-kcol { gap: 12px; }
 .jay-pj-board .jay-kcol-head { padding: 0 0 0 8px; min-height: 34px; }
 .jay-pj-board .jay-kcol-add { height: 44px; border-radius: var(--jay-r-lg); }
 :root.dark .jay-pj-board .jay-kcard { --jay-av-ring: var(--jay-surface); background: var(--jay-surface); }
+/* Press feedback (the card itself, not its menu or subtask buttons). */
+:root.dark .jay-pj-board .jay-kcard:active:not(:has(.jay-kcard-more:active, .jay-kcard-sub:active)) { background: var(--jay-surface-2); }
 .jay-pj-board .jay-kcol-add { background: var(--jay-surface); }
 .jay-pj-board .jay-kcol-add:hover { background: var(--jay-surface-2); }
 
@@ -467,6 +486,7 @@ button.jay-pj-crumb.is-active:hover { color: var(--jay-accent-text); }
 .jay-pj-cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
 .jay-pj-pcard { position: relative; display: grid; gap: 10px; padding: 16px 16px 14px 18px; transition: background var(--jay-dur) var(--jay-ease); }
 .jay-pj-pcard:hover { background: color-mix(in srgb, var(--jay-surface) 94%, var(--jay-text)); }
+.jay-pj-pcard:has(.jay-pj-pcard-link:active) { background: var(--jay-surface-2); }
 .jay-pj-pcard:has(.jay-pj-pcard-link:focus-visible) { outline: 2px solid var(--jay-accent); outline-offset: 2px; }
 .jay-pj-pcard-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .jay-pj-pcard-title { flex: 1 1 auto; min-width: 0; margin: 0; font-family: var(--jay-font-display); font-size: 16px; font-weight: 500; line-height: 1.3; }
@@ -508,6 +528,13 @@ button.jay-pj-crumb.is-active:hover { color: var(--jay-accent-text); }
   .jay-pj-tl-grid { --jay-tl-label: 132px; }
   .jay-pj-tl-scroll { padding: 2px 10px 12px; }
 }
+@media (min-width: 1280px) and (max-width: 1439.98px) {
+  /* The feed gives up 48px (the tree keeps its width: "Business Operations"
+     needs all of it) so the main panel holds three 190px board columns and
+     all five tabs (at 1280: 596px instead of 548px). */
+  .jay-layout.jay-projects.has-side.has-aside:not(.is-state) { grid-template-columns: var(--jay-side-w) minmax(0, 1fr) 288px; }
+  .jay-pj-tabbar > .jay-tabs.is-boxed { padding: 0 14px; gap: 24px; }
+}
 @media (max-width: 1279.98px) {
   /* One more tab (Activity) shares the bar with the team: tighter spacing. */
   .jay-pj-tabbar > .jay-tabs.is-boxed { padding: 0 12px; gap: 22px; }
@@ -517,22 +544,31 @@ button.jay-pj-crumb.is-active:hover { color: var(--jay-accent-text); }
   .jay-pj-team > .jay-av-stack { display: none; }
 }
 @media (max-width: 767.98px) {
-  /* Phone head: [back ····· tools] then the title and streams at full width */
-  .jay-pj-head {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas: "back . tools" "main main main";
+  /* Phone head: one row [back | streams | tools]. The app bar names the
+     project, so the panel drops its title; the status pill leads the streams
+     only when it says something (Paused, Completed, Archived — not a running
+     "Active"/"Ongoing"). Streams scroll sideways. */
+  .jay-pj-head { gap: 2px; min-height: 60px; padding: 8px 4px 8px 6px; }
+  /* The app bar's back chevron leads on phones; the panel's own arrow would be a second one. */
+  .jay-pj-back { display: none; }
+  .jay-pj-head-main {
+    display: flex;
     align-items: center;
-    gap: 2px 0;
-    min-height: 0;
-    padding: 6px 6px 16px 16px;
+    gap: 10px;
+    margin: -10px 0;
+    padding: 10px 0 10px 4px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
   }
-  .jay-pj-back { grid-area: back; margin: 0 0 0 -10px; width: 40px; height: 40px; }
-  .jay-pj-head-main { grid-area: main; }
-  .jay-pj-head-tools { grid-area: tools; align-self: center; }
-  .jay-pj-title-row { gap: 10px; }
-  .jay-pj-title { font-size: 21px; white-space: normal; }
-  .jay-pj-crumbs { gap: 2px 8px; margin-top: 4px; }
+  .jay-pj-head-main::-webkit-scrollbar { display: none; }
+  /* Visually hidden, still the panel's heading for assistive tech. */
+  .jay-pj-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .jay-pj-title-row { flex-shrink: 0; }
+  .jay-pj-head:is([data-status="active"], [data-status="ongoing"]) .jay-pj-title-row { position: absolute; }
+  .jay-pj-head:is([data-status="active"], [data-status="ongoing"]) .jay-pj-title-row > .jay-dotpill { display: none; }
+  .jay-pj-head-tools { align-self: center; }
+  .jay-pj-crumbs { flex-wrap: nowrap; flex-shrink: 0; gap: 0 8px; margin-top: 0; padding-right: 12px; }
   .jay-pj-crumb-i { gap: 8px; }
   .jay-pj-crumb { font-size: 12.5px; }
   .jay-pj-tool { width: 40px; height: 40px; }
@@ -540,7 +576,18 @@ button.jay-pj-crumb.is-active:hover { color: var(--jay-accent-text); }
   .jay-pj-tabbar > .jay-tabs.is-boxed { padding: 0 16px; gap: 22px; }
   .jay-pj-tabbar .jay-tabs.is-boxed .jay-tab { height: 52px; font-size: 13.5px; }
   .jay-pj-team { display: none; }
-  .jay-pj-toolbar { flex-wrap: wrap; padding: 0; margin: 0 -4px; }
+  .jay-pj-toolbar { flex-wrap: nowrap; padding: 0; margin: 0 -4px; }
+  /* One row on phones: an unfiltered Filter is icon-only (its aria-label names
+     it), and the stream chip and a filter label shorten before anything wraps. */
+  .jay-pj-toolbar > .jay-pj-views { flex-shrink: 0; }
+  .jay-pj-filter { position: relative; flex-shrink: 1; min-width: 40px; }
+  .jay-pj-filter:not(.is-filtered) { width: 40px; padding: 0; justify-content: center; }
+  .jay-pj-filter:not(.is-filtered) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .jay-pj-filter.is-filtered > span:not(.jay-badge) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .jay-pj-toolbar > .jay-pj-chip { flex-shrink: 1; }
+  .jay-pj-toolbar > .jay-pj-chip > span:not(.jay-pj-chip-k) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .jay-pj-toolbar > .jay-pj-chip > .jay-pj-chip-k { display: none; }
+  .jay-pj-toolbar > .jay-pj-chip > .jay-icon { flex-shrink: 0; }
   .jay-pj-viewbtn { height: 40px; padding: 0 10px; font-size: 13.5px; }
   /* Bounded board (as on Tasks): one screen tall, each column scrolls on its
      own, so the tallest column never sets the page height and the column
@@ -575,6 +622,11 @@ button.jay-pj-crumb.is-active:hover { color: var(--jay-accent-text); }
   .jay-pj-pv-meter { grid-column: 1 / -1; }
   .jay-pj-pv-stats > :nth-child(2) { box-shadow: inset 0 1px 0 var(--jay-border); }
   .jay-pj-pv-stats > :nth-child(3) { box-shadow: inset 1px 0 0 var(--jay-border), inset 0 1px 0 var(--jay-border); }
+}
+@media (max-width: 359.98px) {
+  /* Narrowest phones: List / Board go icon-only (the text stays their name). */
+  .jay-pj-views > .jay-pj-viewbtn { position: relative; width: 40px; padding: 0; justify-content: center; }
+  .jay-pj-views > .jay-pj-viewbtn > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 @media (pointer: coarse) {
   /* Feed target buttons get an invisible 40px hit area; the text line stays tight. */
